@@ -2,6 +2,10 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.dagger.hilt)
+    kotlin("kapt")
+
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -37,6 +41,16 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging {
+        resources {
+            excludes += "META-INF/DEPENDENCIES"
+            excludes += "META-INF/NOTICE"
+            excludes += "META-INF/LICENSE"
+            excludes += "META-INF/LICENSE.txt"
+            excludes += "META-INF/NOTICE.txt"
+            excludes += "mozilla/public-suffix-list.txt"
+        }
+    }
 }
 
 dependencies {
@@ -56,4 +70,19 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    implementation(libs.dagger.hilt.android)
+    implementation(libs.firebase.crashlytics.buildtools)
+    kapt(libs.dagger.hilt.compiler)
+    implementation(libs.dagger.hilt.compose)
+    implementation(libs.coil)
+    implementation(libs.material)
+    implementation(platform("com.google.firebase:firebase-bom:34.1.0"))
+    implementation("com.google.firebase:firebase-analytics")
+
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-database")
+    implementation("com.google.firebase:firebase-storage")
+    implementation ("com.google.firebase:firebase-messaging")
+    implementation ("com.google.auth:google-auth-library-oauth2-http:1.19.0")
 }

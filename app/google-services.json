@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "202205269940",
+    "project_id": "chatferit",
+    "storage_bucket": "chatferit.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:202205269940:android:eea1097d5a66106525ece1",
+        "android_client_info": {
+          "package_name": "com.example.chatferit"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD53TK99EJYMrrTtSH14Q87COR8hvVN1Ac"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

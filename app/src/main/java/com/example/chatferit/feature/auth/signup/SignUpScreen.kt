@@ -94,8 +94,8 @@ fun SignUpScreen(navController: NavController) {
                 enabled = name.isNotEmpty() && surname.isNotEmpty() && email.isNotEmpty() && password.isNotEmpty() && confirmPassword.isNotEmpty() && password == confirmPassword) {
                 Text(text = "Sign up")
             }
-            TextButton(onClick = {/*TODO*/}) {
-                Text(text = "Already have an account? Sign In.")
+            TextButton(onClick = {navController.popBackStack()}) {
+                Text(text = "Already have an account? Sign In!")
             }
 
 

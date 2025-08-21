@@ -18,10 +18,10 @@ fun MainApp()
         val navController = rememberNavController()
         NavHost(
             navController = navController,
-            startDestination = "login",
+            startDestination = "signin",
         )
         {
-            composable("login")
+            composable("signin")
             {
                 SignInScreen(navController)
             }

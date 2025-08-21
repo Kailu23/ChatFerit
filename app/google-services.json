@@ -12,7 +12,20 @@
           "package_name": "com.example.chatferit"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "202205269940-nhpuss14qn4jucaqag1rqbnv62kmk210.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.chatferit",
+            "certificate_hash": "af7196f5d6d3678706fad4d62c3c2956895039f8"
+          }
+        },
+        {
+          "client_id": "202205269940-hlbdtvtia2mmk9mqvck6esdul42f5lf3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyD53TK99EJYMrrTtSH14Q87COR8hvVN1Ac"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "202205269940-hlbdtvtia2mmk9mqvck6esdul42f5lf3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

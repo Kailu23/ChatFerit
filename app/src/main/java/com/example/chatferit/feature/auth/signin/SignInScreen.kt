@@ -59,12 +59,10 @@ fun SignInScreen(navController: NavController) {
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it},
-                placeholder = {Text(text = "E-mail")},
                 label = { Text(text = "E-mail")})
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it},
-                placeholder = {Text(text = "Password")},
                 label = { Text(text = "Password")},
                 visualTransformation = PasswordVisualTransformation())
 

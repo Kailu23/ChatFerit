@@ -33,7 +33,8 @@ class ChatViewModel @Inject constructor(
             senderImage = null,
             imageUrl = null
         )
-        val key = firebaseDatabase.getReference("messages").child(channelId).push().setValue(message)
+
+        firebaseDatabase.reference.child("messages").child(channelId).push().setValue(message)
     }
     fun ListenForMessages(channelId : String) {
         firebaseDatabase.getReference("messages").child(channelId).orderByChild("createdAt")

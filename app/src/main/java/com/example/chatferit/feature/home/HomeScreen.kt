@@ -1,5 +1,8 @@
 package com.example.chatferit.feature.home
 
+import android.R
+import android.widget.Space
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,16 +12,22 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldColors
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -30,6 +39,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.modifier.modifierLocalOf
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -38,7 +49,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.example.chatferit.model.Channel
-
+import com.example.chatferit.ui.theme.DarkGray
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,7 +77,9 @@ fun HomeScreen(navController: NavController) {
                     color = Color.White
                 )
             }
-        }
+        },
+        containerColor = Color.Black
+
     ){
         Box(
             modifier = Modifier
@@ -74,6 +87,37 @@ fun HomeScreen(navController: NavController) {
                 .fillMaxSize()
         ) {
             LazyColumn {
+                item {
+                    Text(text = "Messages", color = Color.Gray, style = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Black), modifier = Modifier.padding(16.dp))
+                }
+
+                item {
+                    TextField(
+                        value = "", onValueChange = {},
+                        placeholder = { Text(text = "Search") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .clip(RoundedCornerShape(40.dp)),
+
+                        textStyle = TextStyle(color = Color.Gray),
+                        colors = TextFieldDefaults.colors().copy(
+                            focusedContainerColor = DarkGray,
+                            unfocusedContainerColor = DarkGray,
+                            focusedTextColor = Color.Gray,
+                            unfocusedTextColor = Color.Gray,
+                            focusedPlaceholderColor = Color.Gray,
+                            unfocusedPlaceholderColor = Color.Gray,
+                            focusedIndicatorColor = Color.Gray
+                        ),
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.Search,
+                                contentDescription = null
+                            ) }
+                    )
+                }
+
                 items(channels.value) { channel ->
                     Column {
                         Text(text = channel.name,

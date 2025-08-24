@@ -1,14 +1,18 @@
 package com.example.chatferit.feature.chat
 
-import android.R
+import com.example.chatferit.R
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,6 +28,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.currentCompositionLocalContext
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -31,12 +36,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.modifier.modifierLocalOf
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.chatferit.model.Message
+import com.example.chatferit.ui.theme.DarkGray
+import com.example.chatferit.ui.theme.Purple
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import org.w3c.dom.Text
@@ -45,7 +54,9 @@ import org.w3c.dom.Text
 fun ChatScreen(navController: NavController, channelId : String) {
 
     val viewModel : ChatViewModel = hiltViewModel()
-    Scaffold {
+    Scaffold (
+        containerColor = Color.Black
+    ){
         Column (modifier = Modifier
             .fillMaxSize()
             .padding(it)){
@@ -86,7 +97,8 @@ fun ChatMessages(
         }
 
         Row (
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
                 .align(Alignment.BottomCenter)
                 .padding(8.dp)
                 .background(Color.LightGray),
@@ -119,9 +131,9 @@ fun ChatMessages(
 fun ChatBubble(message: Message) {
     val isCurrentUser = message.senderId == Firebase.auth.currentUser?.uid
     val bubbleColor = if (isCurrentUser) {
-        Color.Blue
+        Purple
     } else {
-        Color.Green
+        DarkGray
     }
     Box (
         modifier = Modifier
@@ -129,16 +141,29 @@ fun ChatBubble(message: Message) {
             .padding(vertical = 4.dp, horizontal = 8.dp),
     ){
         val alignment = if (!isCurrentUser) Alignment.CenterStart else Alignment.CenterEnd
-        Box(
+        Row(
             modifier = Modifier
                 .padding(8.dp)
                 .background(color = bubbleColor, shape = RoundedCornerShape(8.dp))
-                .align(alignment)
+                .align(alignment),
+            verticalAlignment = Alignment.CenterVertically
         ){
+            if (!isCurrentUser) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_android_black_24dp),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(40.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+
             Text(
-                text = message.message,
+                text = message.message.trim(),
                 color = Color.White,
-                modifier = Modifier.padding(8.dp)
+                modifier = Modifier
+                    .background(color = bubbleColor, shape = RoundedCornerShape(8.dp))
+                    .padding(16.dp)
             )
 
 

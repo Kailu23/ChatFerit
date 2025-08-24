@@ -3,6 +3,7 @@ package com.example.chatferit.feature.chat
 import com.example.chatferit.R
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.snapping.SnapPosition
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +26,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -57,6 +59,9 @@ fun ChatScreen(navController: NavController, channelId : String) {
     Scaffold (
         containerColor = Color.Black
     ){
+
+
+
         Column (modifier = Modifier
             .fillMaxSize()
             .padding(it)){
@@ -100,10 +105,15 @@ fun ChatMessages(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
-                .padding(8.dp)
-                .background(Color.LightGray),
+                .background(DarkGray)
+                .padding(8.dp),
             verticalAlignment = Alignment.Bottom
         ){
+            IconButton(
+                onClick = { /*TODO()*/ }
+            ) {
+                Image(painter = painterResource(R.drawable.outline_attach_file_24), contentDescription = "Attach File", alignment = Alignment.Center, modifier = Modifier.size(24.dp))
+            }
             TextField(
                 value = message.value, onValueChange = {message.value = it},
             modifier = Modifier.weight(1f),
@@ -113,6 +123,14 @@ fun ChatMessages(
                     onDone = {
                         hideKeyboardController?.hide()
                     }
+                ),
+                colors = TextFieldDefaults.colors().copy(
+                    focusedContainerColor = DarkGray,
+                    unfocusedContainerColor = DarkGray,
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedPlaceholderColor = Color.White,
+                    unfocusedPlaceholderColor = Color.White
                 )
             )
             IconButton(
@@ -121,7 +139,7 @@ fun ChatMessages(
                 message.value = "" },
                 enabled = message.value.isNotEmpty()
                 ) {
-                Icon(imageVector = Icons.AutoMirrored.Filled.Send, contentDescription = "send")
+                Image(painter = painterResource(R.drawable.send), contentDescription = "Send", modifier = Modifier.size(24.dp), alignment = Alignment.Center)
             }
         }
     }
@@ -147,7 +165,7 @@ fun ChatBubble(message: Message) {
                 .background(color = bubbleColor, shape = RoundedCornerShape(8.dp))
                 .align(alignment),
             verticalAlignment = Alignment.CenterVertically
-        ){
+        ) {
             if (!isCurrentUser) {
                 Image(
                     painter = painterResource(id = R.drawable.ic_android_black_24dp),
@@ -162,10 +180,8 @@ fun ChatBubble(message: Message) {
                 text = message.message.trim(),
                 color = Color.White,
                 modifier = Modifier
-                    .background(color = bubbleColor, shape = RoundedCornerShape(8.dp))
                     .padding(16.dp)
             )
-
 
 
         }

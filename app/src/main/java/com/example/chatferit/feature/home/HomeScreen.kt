@@ -125,7 +125,7 @@ fun HomeScreen(navController: NavController) {
                 items(channels.value) { channel ->
                     Column {
                         ChannelItem(channelName = channel.name, onClick = {
-                            navController.navigate("chat/${channel.id}")
+                            navController.navigate("chat/${channel.id}&${channel.name}")
 
                         })
                     }

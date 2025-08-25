@@ -32,7 +32,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -53,10 +52,14 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import android.Manifest
+import android.util.Log
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 
 @Composable
-fun ChatScreen(navController: NavController, channelId : String) {
+fun ChatScreen(navController: NavController, channelId : String, channelName : String) {
 
     val viewModel : ChatViewModel = hiltViewModel()
     Scaffold (
@@ -64,16 +67,24 @@ fun ChatScreen(navController: NavController, channelId : String) {
     ){
 
         val selectDialog = remember { mutableStateOf(false) }
-        val cameraImageUri = remember { mutableStateOf<Uri?>(null) }
-        val cameraImageLauncher =
-            rememberLauncherForActivityResult(contract = ActivityResultContracts.TakePicture()) {
-                success ->
-                if (success) {
-                    cameraImageUri.value?.let {
-                        /*TODO()*/
-                    }
+        val cameraImageUri = remember {
+            mutableStateOf<Uri?>(null)
+        }
+        val cameraImageLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.TakePicture()
+        ) { success ->
+            if (success) {
+                cameraImageUri.value?.let {
+                    viewModel.SendImageMessage(it, channelId)
                 }
             }
+        }
+
+        val imageLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent()
+        ) { uri: Uri? ->
+            uri?.let { viewModel.SendImageMessage(it, channelId) }
+        }
 
         fun createImageUri(): Uri {
             val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
@@ -110,7 +121,7 @@ fun ChatScreen(navController: NavController, channelId : String) {
             ChatMessages(
                 messages = messages.value,
                 onSendMessage = {message ->
-                    viewModel.sendMessage(channelId, message)
+                    viewModel.SendMessage(channelId, message)
                 },
                 onImageClicked = {selectDialog.value = true}
             )
@@ -128,7 +139,7 @@ fun ChatScreen(navController: NavController, channelId : String) {
 
             }, onGallerySelected = {
                 selectDialog.value = false
-//                imageLauncher.launch("image/*")
+                imageLauncher.launch("image/*")
             })
         }
     }
@@ -144,7 +155,7 @@ fun ContentSelectionDialog(onCameraSelected: () -> Unit, onGallerySelected: () -
             )
         }},
         dismissButton = {
-            TextButton (onClick = onCameraSelected) {
+            TextButton (onClick = onGallerySelected) {
                 Text(
                     text = "Gallery",
                     color = DarkGray
@@ -168,11 +179,11 @@ fun ChatMessages(
     val message = remember { mutableStateOf("") }
 
     val hideKeyboardController = LocalSoftwareKeyboardController.current
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
     ) {
-        LazyColumn {
+        LazyColumn (modifier = Modifier.weight(1f)){
             items(messages) { message ->
                 ChatBubble(message = message)
             }
@@ -181,7 +192,6 @@ fun ChatMessages(
         Row (
             modifier = Modifier
                 .fillMaxWidth()
-                .align(Alignment.BottomCenter)
                 .background(DarkGray)
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -242,7 +252,7 @@ fun ChatBubble(message: Message) {
         Row(
             modifier = Modifier
                 .padding(8.dp)
-                .background(color = bubbleColor, shape = RoundedCornerShape(8.dp))
+                .background(color = bubbleColor, shape = RoundedCornerShape(16.dp))
                 .align(alignment),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -255,13 +265,22 @@ fun ChatBubble(message: Message) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
-
-            Text(
-                text = message.message.trim(),
-                color = Color.White,
-                modifier = Modifier
-                    .padding(16.dp)
-            )
+            Box(modifier = Modifier.padding(16.dp))
+            {
+                if (message.imageUrl != null) {
+                    AsyncImage(
+                        model = message.imageUrl,
+                        contentDescription = null,
+                        modifier = Modifier.size(200.dp),
+                        contentScale = ContentScale.Crop
+                    )
+                }else {
+                    Text(
+                        text = message.message.trim(),
+                        color = Color.White,
+                    )
+                }
+            }
 
 
         }

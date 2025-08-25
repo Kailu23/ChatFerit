@@ -57,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
+import com.example.chatferit.feature.home.ChannelItem
 
 @Composable
 fun ChatScreen(navController: NavController, channelId : String, channelName : String) {
@@ -120,10 +121,10 @@ fun ChatScreen(navController: NavController, channelId : String, channelName : S
 
             ChatMessages(
                 messages = messages.value,
-                onSendMessage = {message ->
+                onSendMessage = { message ->
                     viewModel.SendMessage(channelId, message)
                 },
-                onImageClicked = {selectDialog.value = true}
+                onImageClicked = { selectDialog.value = true }, channelName = channelName
             )
         }
 
@@ -172,8 +173,9 @@ fun ContentSelectionDialog(onCameraSelected: () -> Unit, onGallerySelected: () -
 
 @Composable
 fun ChatMessages(
-    messages : List<Message>,
-    onSendMessage : (String) -> Unit,
+    channelName: String,
+    messages: List<Message>,
+    onSendMessage: (String) -> Unit,
     onImageClicked: () -> Unit
 ) {
     val message = remember { mutableStateOf("") }
@@ -183,30 +185,38 @@ fun ChatMessages(
         modifier = Modifier
             .fillMaxSize()
     ) {
-        LazyColumn (modifier = Modifier.weight(1f)){
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            item {
+                ChannelItem(channelName, onClick = {}, modifier = Modifier)
+            }
             items(messages) { message ->
                 ChatBubble(message = message)
             }
         }
 
-        Row (
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(DarkGray)
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
-        ){
+        ) {
             IconButton(
                 onClick = {
                     message.value = ""
                     onImageClicked()
                 }
             ) {
-                Image(painter = painterResource(R.drawable.outline_attach_file_24), contentDescription = "Attach File", alignment = Alignment.Center, modifier = Modifier.size(24.dp))
+                Image(
+                    painter = painterResource(R.drawable.outline_attach_file_24),
+                    contentDescription = "Attach File",
+                    alignment = Alignment.Center,
+                    modifier = Modifier.size(24.dp)
+                )
             }
             TextField(
-                value = message.value, onValueChange = {message.value = it},
-            modifier = Modifier.weight(1f),
+                value = message.value, onValueChange = { message.value = it },
+                modifier = Modifier.weight(1f),
                 placeholder = { Text(text = "Type a message") },
                 keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(
@@ -225,11 +235,17 @@ fun ChatMessages(
             )
             IconButton(
                 onClick = {
-                onSendMessage(message.value)
-                message.value = "" },
+                    onSendMessage(message.value)
+                    message.value = ""
+                },
                 enabled = message.value.isNotEmpty()
-                ) {
-                Image(painter = painterResource(R.drawable.send), contentDescription = "Send", modifier = Modifier.size(24.dp), alignment = Alignment.Center)
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.send),
+                    contentDescription = "Send",
+                    modifier = Modifier.size(24.dp),
+                    alignment = Alignment.Center
+                )
             }
         }
     }

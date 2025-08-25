@@ -1,7 +1,10 @@
 package com.example.chatferit.feature.chat
 
+import android.net.Uri
+import android.widget.ImageView
 import androidx.compose.animation.core.snap
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.ViewModel
 import com.example.chatferit.model.Message
@@ -11,6 +14,7 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import com.google.firebase.storage.storage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,10 +28,10 @@ class ChatViewModel @Inject constructor(
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages = _messages.asStateFlow()
 
-    fun sendMessage(channelId: String, messageText: String) {
+    fun sendMessage(channelId: String, messageText: String?, image: String? = null) {
         val message = Message(
             id = firebaseDatabase.reference.push().key?: UUID.randomUUID().toString(),
-            message = messageText,
+            message = messageText?:"",
             senderId = Firebase.auth.currentUser?.uid,
             senderName = Firebase.auth.currentUser?.displayName,
             senderImage = null,
@@ -35,6 +39,26 @@ class ChatViewModel @Inject constructor(
         )
 
         firebaseDatabase.reference.child("messages").child(channelId).push().setValue(message)
+    }
+
+    fun SendImageMessage(uri: Uri, channelId: String) {
+        val imageRef = Firebase.storage.reference.child("images/${UUID.randomUUID()}")
+
+        imageRef.putFile(uri).continueWithTask { task ->
+            if (!task.isSuccessful) {
+                task.exception?.let {
+                    throw it
+                }
+            }
+            imageRef.downloadUrl
+        }.addOnCompleteListener { task ->
+            val currentUser = Firebase.auth.currentUser
+            if (task.isSuccessful) {
+                val downloadUri = task.result
+                sendMessage(channelId, null, downloadUri.toString())
+            }
+
+                }
     }
     fun ListenForMessages(channelId : String) {
         firebaseDatabase.getReference("messages").child(channelId).orderByChild("createdAt")

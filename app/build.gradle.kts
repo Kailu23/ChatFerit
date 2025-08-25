@@ -44,6 +44,7 @@ android {
     }
     packaging {
         resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "META-INF/DEPENDENCIES"
             excludes += "META-INF/NOTICE"
             excludes += "META-INF/LICENSE"
@@ -64,6 +65,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.volley)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

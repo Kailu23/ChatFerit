@@ -45,11 +45,13 @@ class ChatViewModel @Inject constructor(
             imageUrl = image
         )
 
-        firebaseDatabase.reference.child("messages").child(channelId).push().setValue(message).addOnCompleteListener { task ->
-            if(task.isSuccessful) {
-                PostNotificationToUsers(channelId = channelId, senderName = message.senderName?: "", messageContent = message.message)
+        firebaseDatabase.reference.child("messages").child(channelId).push().setValue(message)
+            .addOnCompleteListener {
+                Log.d("ChatViewModel", "Message sent successfully to database.")
             }
-        }
+            .addOnFailureListener {
+                Log.d("ChatViewModel", "Message failed to send to database.")
+            }
     }
 
     fun SendImageMessage(uri: Uri, channelID: String) {
@@ -66,6 +68,8 @@ class ChatViewModel @Inject constructor(
                 if (task.isSuccessful) {
                     val downloadUri = task.result
                     SendMessage(channelID, null, downloadUri.toString())
+                } else {
+                    Log.e("ChatViewModel", "Failed to get image download URL.", task.exception)
                 }
             }
     }
@@ -99,45 +103,4 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun PostNotificationToUsers(channelId: String, senderName : String, messageContent: String) {
-        val fcmUrl = "https://fcm.googleapis.com/v1/projects/chatferit/messages:send"
-        val jsonBody = JSONObject().apply {
-            put("message", JSONObject().apply {
-                put("topic", "group_$channelId")
-                put("notification", JSONObject().apply {
-                    put("title", channelId)
-                    put("body", "$senderName: $messageContent")
-                })
-            })
-        }
-
-        val requestBody = jsonBody.toString()
-
-        val request = object : StringRequest(Method.POST, fcmUrl,Response.Listener {
-                Log.d("ChatViewModel", "Notification sent successfully")
-            },Response.ErrorListener {
-                Log.e("ChatViewModel", "Failed to send notification")
-            }) {
-            override fun getBody(): ByteArray? {
-                return requestBody.toByteArray()
-            }
-
-            override fun getHeaders(): MutableMap<String, String> {
-                val headers = HashMap<String, String>()
-                headers["Authorization"] = "Bearer ${GetAccessToken()}"
-                headers["Content-Type"] = "application/json"
-                return headers
-            }
-        }
-        val queue = Volley.newRequestQueue(context)
-        queue.add(request)
-
-    }
-
-    private fun GetAccessToken() : String {
-        val inputStream = context.resources.openRawResource(R.raw.chatferit_key)
-        val googleCredentials = GoogleCredentials.fromStream(inputStream)
-            .createScoped(listOf("https://www.googleapis.com/auth/firebase.messaging"))
-        return googleCredentials.refreshAccessToken().tokenValue
-    }
 }

@@ -144,7 +144,7 @@ exports.sendChatNotificationV2 = onValueCreated(
     }
 
     const fcmNotificationPart = {
-      title: `New message in ${channelId}`,
+      title: `New message from ${senderName}`,
       body: notificationBody,
     };
     const fcmDataPart = {channelId: channelId, messageId: messageId};

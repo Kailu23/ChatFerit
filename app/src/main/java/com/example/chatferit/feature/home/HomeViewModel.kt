@@ -1,11 +1,8 @@
 package com.example.chatferit.feature.home
 
 import android.util.Log
-import android.util.Log.e
 import androidx.lifecycle.ViewModel
 
-import com.google.firebase.Firebase
-import com.google.firebase.database.database
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,6 +20,16 @@ class HomeViewModel @Inject constructor(
 
     private val _channels = MutableStateFlow<List<Channel>>(emptyList())
     val channels = _channels.asStateFlow()
+
+    private val _selectedScreenRoute = MutableStateFlow(BottomNavItem.Chats.route) // Default to Chats
+    val selectedScreenRoute = _selectedScreenRoute.asStateFlow()
+
+    private val _showAddChannelDialog = MutableStateFlow(false)
+    val showAddChannelDialog= _showAddChannelDialog.asStateFlow()
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery= _searchQuery.asStateFlow()
+
 
     init {
         getChannels()
@@ -46,6 +53,23 @@ class HomeViewModel @Inject constructor(
             .addOnSuccessListener {
                 getChannels()
             }
+        _showAddChannelDialog.value = false
+    }
 
+    fun onBottomNavItemSelected(route: String) {
+        _selectedScreenRoute.value = route
+    }
+
+    fun onAddChannelClicked() {
+        _showAddChannelDialog.value = true
+    }
+
+    fun onDismissAddChannelDialog() {
+        _showAddChannelDialog.value = false
+    }
+
+    fun onSearchQueryChanged(query: String) {
+        _searchQuery.value = query
+        // Optionally trigger search/filter logic here
     }
 }

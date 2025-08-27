@@ -23,7 +23,11 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
@@ -60,9 +64,20 @@ import com.example.chatferit.ui.theme.DarkGray
 @Composable
 fun HomeScreen(navController: NavController) {
     val viewModel = hiltViewModel<HomeViewModel>()
-    val channels = viewModel.channels.collectAsState()
-    val addChannel = remember { mutableStateOf(false) }
+    val channels by viewModel.channels.collectAsState()
+    val showDialogState by viewModel.showAddChannelDialog.collectAsState()
     val sheetState = rememberModalBottomSheetState()
+    val selectedScreenRoute by viewModel.selectedScreenRoute.collectAsState()
+    val currentSearchQuery by viewModel.searchQuery.collectAsState()
+
+    if (showDialogState) {
+        ModalBottomSheet(onDismissRequest = {viewModel.onDismissAddChannelDialog()}, sheetState = sheetState) {
+            AddChannelDialog { channelName ->
+                viewModel.addChannel(channelName)
+            }
+        }
+    }
+
     Scaffold (
         floatingActionButton = {
             Box(
@@ -72,7 +87,7 @@ fun HomeScreen(navController: NavController) {
                     .background(Color.Blue.copy(alpha = 0.65f))
                     .clickable()
                     {
-                        addChannel.value = true
+                        viewModel.onAddChannelClicked()
                     }
             ){
                 Text(
@@ -82,69 +97,104 @@ fun HomeScreen(navController: NavController) {
                 )
             }
         },
-        containerColor = Color.Black
+        containerColor = Color.Black,
+        bottomBar = {
+            NavigationBar(containerColor = DarkGray,
+                ) {
+                bottomNavItemsList.forEach { item ->
+                    NavigationBarItem(
+                        selected = selectedScreenRoute == item.route,
+                        onClick = {
+                            viewModel.onBottomNavItemSelected(item.route)
+                            /*if (selectedScreenRoute != item.route) {
+                            }*/
+                        },
+                        icon = { Icon(item.icon, contentDescription = item.label) },
+                        label = {Text(item.label)},
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedTextColor = Color.White,
+                            unselectedTextColor = Color.DarkGray,
+                            selectedIconColor = Color.White,
+                            unselectedIconColor = Color.DarkGray,
+                            indicatorColor = Color.DarkGray
 
-    ){
-        Box(
-            modifier = Modifier
-                .padding(it)
-                .fillMaxSize()
-        ) {
-            LazyColumn {
-                item {
-                    Text(text = "Messages", color = Color.Gray, style = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Black), modifier = Modifier.padding(16.dp))
-                }
-
-                item {
-                    TextField(
-                        value = "", onValueChange = {},
-                        placeholder = { Text(text = "Search") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                            .clip(RoundedCornerShape(40.dp)),
-
-                        textStyle = TextStyle(color = Color.Gray),
-                        colors = TextFieldDefaults.colors().copy(
-                            focusedContainerColor = DarkGray,
-                            unfocusedContainerColor = DarkGray,
-                            focusedTextColor = Color.Gray,
-                            unfocusedTextColor = Color.Gray,
-                            focusedPlaceholderColor = Color.Gray,
-                            unfocusedPlaceholderColor = Color.Gray,
-                            focusedIndicatorColor = Color.Gray
-                        ),
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Filled.Search,
-                                contentDescription = null
-                            ) }
+                        )
                     )
                 }
-
-                items(channels.value) { channel ->
-                    Column {
-                        ChannelItem(
-                            channelName = channel.name,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-                            onClick = {
-                                navController.navigate("chat/${channel.id}&${channel.name}")
-                            })
-                    }
-                }
             }
         }
 
-    }
-    if (addChannel.value) {
-        ModalBottomSheet(onDismissRequest = {addChannel.value = false}, sheetState = sheetState) {
-            AddChannelDialog {
-                viewModel.addChannel(it)
-                addChannel.value = false
+    ){ paddingValues ->
+        Box(
+            modifier = Modifier
+                .padding(paddingValues)
+                .fillMaxSize()
+        ) {
+            ChatsScreenContent(
+                channels = channels,
+                searchQuery = currentSearchQuery,
+                onSearchQueryChanged = { query -> viewModel.onSearchQueryChanged(query) },
+                onChannelClick = { channelId, channelName -> navController.navigate("chat/$channelId&$channelName") })
+
             }
         }
-
     }
+
+
+@Composable
+fun ChatsScreenContent(
+    channels: List<Channel>,
+    searchQuery: String,
+    onSearchQueryChanged: (String) -> Unit,
+    onChannelClick: (String, String) -> Unit
+) {
+    LazyColumn {
+        item {
+            Text(
+                text = "Messages",
+                color = Color.Gray,
+                style = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Black),
+                modifier = Modifier.padding(16.dp)
+            )
+        }
+
+        item {
+            TextField(
+                value = searchQuery, onValueChange = {onSearchQueryChanged(it)},
+                placeholder = { Text(text = "Search") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clip(RoundedCornerShape(40.dp)),
+
+                textStyle = TextStyle(color = Color.Gray),
+                colors = TextFieldDefaults.colors().copy(
+                    focusedContainerColor = DarkGray,
+                    unfocusedContainerColor = DarkGray,
+                    focusedTextColor = Color.Gray,
+                    unfocusedTextColor = Color.Gray,
+                    focusedPlaceholderColor = Color.Gray,
+                    unfocusedPlaceholderColor = Color.Gray,
+                    focusedIndicatorColor = Color.Gray
+                ),
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.Search,
+                        contentDescription = null
+                    ) }
+            )
+        }
+
+        items(channels.filter { it.name.contains(searchQuery, ignoreCase = true) }) { channel ->
+            Column {
+                ChannelItem(
+                    channelName = channel.name,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                    onClick = { onChannelClick(channel.id, channel.name) })
+            }
+        }
+    }
+
 }
 
 @Composable
@@ -185,12 +235,6 @@ fun ChannelItem(channelName : String, onClick : () -> Unit, modifier: Modifier) 
 
     }
 
-}
-
-@Preview
-@Composable
-private fun PreviewItem() {
-    ChannelItem(channelName = "Food", modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp), onClick = {})
 }
 
 @Composable

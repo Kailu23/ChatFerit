@@ -35,11 +35,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.example.chatferit.R
+import com.example.chatferit.feature.auth.*
 
 @Composable
 fun SignUpScreen(navController: NavController) {
-    val viewModel : SignUpViewModel = hiltViewModel()
-    val uiState = viewModel.state.collectAsState()
+    val viewModel : AuthViewModel = hiltViewModel()
+    val authScreenState by viewModel.authScreenState.collectAsState()
+    val keySetupState by viewModel.keySetupState.collectAsState()
+
     var name by remember {
         mutableStateOf(value = "")
     }
@@ -55,25 +58,42 @@ fun SignUpScreen(navController: NavController) {
     var confirmPassword by remember {
         mutableStateOf(value = "")
     }
-
     val context = LocalContext.current
-    LaunchedEffect(key1 = uiState.value)
+
+    LaunchedEffect(key1 = authScreenState, key2 = keySetupState)
     {
-        when (uiState.value) {
-            is SignUpState.Success -> {
-                navController.navigate("home")
+        if (authScreenState is AuthScreenState.AuthSuccess && keySetupState is KeySetupState.Success) {
+            Toast.makeText(context, "Sign Up Successful!", Toast.LENGTH_SHORT).show()
+            navController.navigate("home") {
+                popUpTo(navController.graph.startDestinationId) { inclusive = true }
             }
-
-            is SignUpState.Error -> {
-                Toast.makeText(context, "Sign Up failed", Toast.LENGTH_SHORT).show()
-            }
-
-            else -> {}
         }
     }
-    Scaffold (modifier = Modifier.fillMaxSize()){
+    LaunchedEffect(authScreenState){
+        if (authScreenState is AuthScreenState.AuthError) {
+            Toast.makeText(
+                context,
+                (authScreenState as AuthScreenState.AuthError).message,
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    LaunchedEffect(keySetupState) {
+        if (keySetupState is KeySetupState.Error) {
+            Toast.makeText(
+                context,
+                (keySetupState as KeySetupState.Error).message,
+                Toast.LENGTH_LONG
+            ).show()
+            navController.navigate("retry")
+        }
+    }
+
+    Scaffold (modifier = Modifier.fillMaxSize()) {paddingValues ->
+
         Column (modifier = Modifier
-            .padding(it)
+            .padding(paddingValues)
             .padding(16.dp)
             .fillMaxSize(),
             verticalArrangement = Arrangement.Center,
@@ -112,12 +132,19 @@ fun SignUpScreen(navController: NavController) {
                 label = { Text(text = "Confirm password")},
                 visualTransformation = PasswordVisualTransformation(),
                 isError = password.isNotEmpty() && confirmPassword.isNotEmpty() && password != confirmPassword)
+
             Spacer(modifier = Modifier.size(16.dp))
-            if (uiState.value == SignUpState.Loading) {
+
+            if (authScreenState is AuthScreenState.Loading || keySetupState is KeySetupState.Loading) {
                 CircularProgressIndicator()
             } else {
                 Button(onClick = {
-                    viewModel.SignUp(name, surname, email, password)
+                    viewModel.signUpWithEmailAndPassword(
+                        name = name,
+                        surname = surname,
+                        email = email,
+                        password = password
+                    )
                     },modifier = Modifier.fillMaxWidth(),
                     enabled = name.isNotEmpty() && surname.isNotEmpty() && email.isNotEmpty() && password.isNotEmpty() && confirmPassword.isNotEmpty() && password == confirmPassword) {
                     Text(text = "Sign up")
@@ -126,8 +153,6 @@ fun SignUpScreen(navController: NavController) {
             TextButton(onClick = {navController.popBackStack()}) {
                 Text(text = "Already have an account? Sign In!")
             }
-
-
         }
     }
 }

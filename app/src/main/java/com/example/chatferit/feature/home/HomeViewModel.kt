@@ -2,9 +2,14 @@ package com.example.chatferit.feature.home
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.chatferit.data.repository.UserRepository
+import com.example.chatferit.data.repository.iFriendRepository
 import com.example.chatferit.model.Channel
 import com.example.chatferit.model.ChannelType
+import com.example.chatferit.model.FriendRequest
 import com.example.chatferit.model.UserProfile
+import com.example.chatferit.util.Resource
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
@@ -12,8 +17,12 @@ import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
@@ -21,7 +30,9 @@ import javax.inject.Inject
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val firebaseDatabase: FirebaseDatabase,
-    private val firebaseAuth: FirebaseAuth
+    private val firebaseAuth: FirebaseAuth,
+    private val userRepository: UserRepository,
+    private val friendRepository: iFriendRepository
 ) : ViewModel() {
 
     private val _channels = MutableStateFlow<List<Channel>>(emptyList())
@@ -39,12 +50,36 @@ class HomeViewModel @Inject constructor(
     private val _allUsers = MutableStateFlow<List<UserProfile>>(emptyList())
     val allUsers: StateFlow<List<UserProfile>> = _allUsers.asStateFlow()
 
+    private val _friendUids = MutableStateFlow<Set<String>>(emptySet())
+    val friendUids = _friendUids.asStateFlow()
+
+    private val _incomingFriendRequests = MutableStateFlow<List<FriendRequest>>(emptyList())
+    val incomingFriendRequests: StateFlow<List<FriendRequest>> = _incomingFriendRequests.asStateFlow()
+
+    private val _sentFriendRequests = MutableStateFlow<List<FriendRequest>>(emptyList())
+    val sentFriendRequests: StateFlow<List<FriendRequest>> = _incomingFriendRequests.asStateFlow()
+
+    private val _showAddFriendDialog = MutableStateFlow(false)
+    val showAddFriendDialog = _showAddFriendDialog.asStateFlow()
+
     private val currentUserId: String? = firebaseAuth.currentUser?.uid
+
+    val actualFriends: StateFlow<List<UserProfile>> = combine(
+        _allUsers,
+        _friendUids,
+        searchQuery
+    ) { allUsersList, currentFriendUids, query ->
+        allUsersList.filter { userProfile ->
+            currentFriendUids.contains(userProfile.uid) && (query.isBlank() || userProfile.displayName.contains(query, ignoreCase = true))
+        }.sortedBy { it.displayName }
+    }.stateIn(viewModelScope,SharingStarted.WhileSubscribed(5000), emptyList())
 
 
     init {
         listenForChannels()
         listenForAllUsers()
+        listenForCurrentUserFriends()
+        listenForIncomingFriendRequests()
     }
 
     private fun listenForChannels() {
@@ -76,6 +111,23 @@ class HomeViewModel @Inject constructor(
                 Log.e("HomeViewModel", "Firebase channel listener cancelled", error.toException())
             }
         })
+    }
+
+    private fun listenForCurrentUserFriends() {
+        val currentFbUserUid = firebaseAuth.currentUser?.uid ?: run { _friendUids.value = emptySet(); return }
+
+        viewModelScope.launch {
+            friendRepository.getFriendUids(currentFbUserUid).collect{ result ->
+                when (result) {
+                    is Resource.Success -> _friendUids.value = result.data ?: emptySet()
+                    is Resource.Error -> {
+                        Log.e("HomeViewModel", "Error fetching friend UIDs: ${result.message}")
+                        _friendUids.value = emptySet()
+                    }
+                    is Resource.Loading -> TODO()
+                }
+            }
+        }
     }
 
     private fun listenForAllUsers() {
@@ -196,5 +248,111 @@ class HomeViewModel @Inject constructor(
 
     fun onSearchQueryChanged(query: String) {
         _searchQuery.value = query
+    }
+
+    fun onAddFriendClicked() { // Renamed from onAddFriendClicked to be specific
+        _showAddFriendDialog.value = true
+    }
+
+    fun onDismissAddFriendDialog() { // Renamed from onAddFriendDialogDismiss
+        _showAddFriendDialog.value = false
+    }
+
+    fun listenForIncomingFriendRequests() {
+        val currentFbUserUid = firebaseAuth.currentUser?.uid ?: run { _incomingFriendRequests.value= emptyList(); return }
+
+        viewModelScope.launch {
+            friendRepository.getIncomingFriendRequests(currentFbUserUid).collect { result ->
+                when (result) {
+                    is Resource.Success -> _incomingFriendRequests.value = result.data ?: emptyList()
+                    is Resource.Error -> {
+                        Log.e("HomeViewModel", "Error fetching incoming friend requests: ${result.message}")
+                        _incomingFriendRequests.value = emptyList()
+                    }
+                    is Resource.Loading -> TODO()
+                }
+            }
+        }
+    }
+
+    fun submitSendFriendRequest(targetUserIdentifier: String) { // e.g., email or UID
+        viewModelScope.launch {
+            val currentFbUserUid = firebaseAuth.currentUser?.uid ?: return@launch
+            if (targetUserIdentifier.isBlank()) {
+                Log.w("HomeViewModel", "Target user identifier is blank.")
+                return@launch
+            }
+
+            val targetUid = targetUserIdentifier
+
+            if (targetUid == currentFbUserUid) {
+                Log.w("HomeViewModel", "Cannot send a friend request to yourself.")
+                return@launch
+            }
+
+            val result = friendRepository.sendFriendRequest(currentFbUserUid, targetUid)
+
+            when(result){
+                is Resource.Success -> {
+                    Log.d("HomeViewModel", "Friend request sent successfully to $targetUid")
+                    _showAddFriendDialog.value = false
+                }
+                is Resource.Error -> Log.e("HomeViewModel", "Error sending friend request: ${result.message}")
+                is Resource.Loading -> TODO()
+            }
+        }
+    }
+
+    fun acceptFriendRequest(request: FriendRequest) {
+        viewModelScope.launch {
+            val currentUid = firebaseAuth.currentUser?.uid ?: return@launch
+            val result = friendRepository.acceptFriendRequest(currentUid, request)
+            when (result) {
+                is Resource.Success -> {
+                    Log.d("HomeViewModel", "Friend request from ${request.senderName} accepted.")
+
+                    getOrCreatePrivateChannel(request.senderId).fold(
+                        onSuccess = { (channelId, channelName) ->
+                            Log.d(
+                                "HomeViewModel",
+                                "Private channel $channelId for new friend ${request.senderName}"
+                            )
+                        },
+                        onFailure = { error ->
+                            Log.e(
+                                "HomeViewModel",
+                                "Failed to get/create channel for new friend ${request.senderName}",
+                                error
+                            )
+                        }
+                    )
+                }
+                is Resource.Error -> {
+                    Log.e("HomeViewModel", "Failed to accept friend request: ${result.message}")
+                }
+                is Resource.Loading -> {
+                    TODO()
+                }
+            }
+        }
+    }
+
+    fun declineFriendRequest(request: FriendRequest) {
+        viewModelScope.launch {
+            val currentUid = firebaseAuth.currentUser?.uid ?: return@launch
+            val result = friendRepository.declineFriendRequest(currentUid, request)
+            when (result) {
+                is Resource.Success -> {
+                    Log.d("HomeViewModel", "Friend request from ${request.senderName} declined.")
+                }
+
+                is Resource.Error -> {
+                    Log.e("HomeViewModel", "Failed to decline friend request: ${result.message}")
+                }
+                is Resource.Loading -> {
+                    TODO()
+                }
+            }
+        }
     }
 }

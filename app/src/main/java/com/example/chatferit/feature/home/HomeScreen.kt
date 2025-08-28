@@ -48,10 +48,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.chatferit.feature.users.UsersTabContent
 import com.example.chatferit.model.Channel
 import com.example.chatferit.ui.theme.DarkGray
 import com.example.chatferit.util.getReceiverIdFromChannel
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.launch
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,20 +61,27 @@ import com.google.firebase.auth.FirebaseAuth
 fun HomeScreen(navController: NavController) {
 
     val viewModel: HomeViewModel = hiltViewModel()
+
     val channels by viewModel.channels.collectAsState()
-    val allUsers by viewModel.allUsers.collectAsState()
-    val showDialogState by viewModel.showAddChannelDialog.collectAsState()
-    val sheetState = rememberModalBottomSheetState()
     val selectedScreenRoute by viewModel.selectedScreenRoute.collectAsState()
-    val currentSearchQuery by viewModel.searchQuery.collectAsState()
     val currentUserId = remember { FirebaseAuth.getInstance().currentUser?.uid }
     val coroutineScope = rememberCoroutineScope()
+
+
+    val actualFriendsList by viewModel.actualFriends.collectAsState()
+    val incomingRequests by viewModel.incomingFriendRequests.collectAsState()
+    val currentSearchQuery by viewModel.searchQuery.collectAsState()
+    val showAddFriendDialog by viewModel.showAddFriendDialog.collectAsState()
+
+    val showAddGroupChannelDialog by viewModel.showAddChannelDialog.collectAsState()
+    val addGroupChannelSheetState = rememberModalBottomSheetState()
+
     val context = LocalContext.current
 
-    if (showDialogState) {
+    if (showAddGroupChannelDialog) {
         ModalBottomSheet(
             onDismissRequest = { viewModel.onDismissAddChannelDialog() },
-            sheetState = sheetState
+            sheetState = addGroupChannelSheetState
         ) {
             AddChannelDialog { channelName ->
                 viewModel.addGroupChannel(channelName)
@@ -139,23 +148,58 @@ fun HomeScreen(navController: NavController) {
                 searchQuery = currentSearchQuery,
                 onSearchQueryChanged = { query -> viewModel.onSearchQueryChanged(query) }
             )
-            ChatsScreenContent(
-                channels = channels,
-                searchQuery = currentSearchQuery,
-                onChannelClick = { channelId, channelName ->
-                    if (currentUserId == null) {
-                        Log.e("HomeScreen", "Cannot navigate: Current user ID is null.")
-                        return@ChatsScreenContent
-                    }
 
-                    val determinedReceiverId = getReceiverIdFromChannel(channelId, currentUserId)
+            when (selectedScreenRoute) {
+                BottomNavItem.Chats.route -> {
+                    ChatsScreenContent(
+                        channels = channels,
+                        searchQuery = currentSearchQuery,
+                        onChannelClick = { channelId, channelName ->
+                            if (currentUserId == null) {
+                                Log.e("HomeScreen", "Cannot navigate: Current user ID is null.")
+                                return@ChatsScreenContent
+                            }
 
-                    if (determinedReceiverId != null && determinedReceiverId.isNotEmpty()) {
-                        Log.d("HomeScreen", "Navigating to: chat/$channelId/$channelName/$determinedReceiverId")
-                        navController.navigate("chat/$channelId/$channelName/$determinedReceiverId")
-                    }
+                            val determinedReceiverId =
+                                getReceiverIdFromChannel(channelId, currentUserId)
+
+                            if (determinedReceiverId != null && determinedReceiverId.isNotEmpty()) {
+                                Log.d(
+                                    "HomeScreen",
+                                    "Navigating to: chat/$channelId/$channelName/$determinedReceiverId"
+                                )
+                                navController.navigate("chat/$channelId/$channelName/$determinedReceiverId")
+                            }
+                        }
+                    )
                 }
-            )
+
+                BottomNavItem.Users.route -> {
+                    UsersTabContent(
+                        friendsList = actualFriendsList,
+                        friendRequestsList = incomingRequests,
+                        searchQuery = currentSearchQuery,
+                        showAddFriendDialog = showAddFriendDialog,
+                        onSearchQueryChanged = {query -> viewModel.onSearchQueryChanged(query)},
+                        onFriendClicked = {userProfile ->
+                            coroutineScope.launch {
+                                viewModel.getOrCreatePrivateChannel(userProfile.uid).fold(
+                                    onSuccess = {(channelId, channelName) ->
+                                        navController.navigate("chat/$channelId/$channelName/${userProfile.uid}")
+                                    },
+                                    onFailure = {error -> Log.e("HomeScreen", "Failed to get/create DM", error) }
+                                )
+                            }
+                        },
+                        onAddFriendClicked = {viewModel.onAddFriendClicked()},
+                        onDismissAddFriendDialog = {viewModel.onDismissAddFriendDialog()},
+                        onSubmitSendFriendRequest = {targetUser -> viewModel.submitSendFriendRequest(targetUser) },
+                        onAcceptRequest = {request -> viewModel.acceptFriendRequest(request)},
+                        onDeclineRequest = {request -> viewModel.declineFriendRequest(request)},
+                    )
+                }
+
+            }
         }
     }
 }

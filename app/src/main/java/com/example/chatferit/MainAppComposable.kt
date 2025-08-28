@@ -1,7 +1,9 @@
 package com.example.chatferit
 
+import android.util.Log
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavType
@@ -43,21 +45,37 @@ fun MainApp()
                 HomeScreen(navController)
             }
             composable(
-                "chat/{channelId}&{channelName}", arguments = listOf(
-                navArgument(name = "channelId") {
-                    type = NavType.StringType
-                },
+                "chat/{channelId}/{channelName}/{receiverId}", arguments = listOf(
+                    navArgument(name = "channelId") {
+                        type = NavType.StringType
+                    },
                     navArgument("channelName")
                     {
                         type = NavType.StringType
+                    },
+                    navArgument("receiverId")
+                    {
+                        type = NavType.StringType
                     }
-            )) {
-                val channelId =  it.arguments?.getString("channelId")?:""
-                val channelName = it.arguments?.getString("channelName")?:""
-                ChatScreen(navController, channelId, channelName)
+                )) {backStackEntry ->
+                val channelId = backStackEntry.arguments?.getString("channelId") ?: ""
+                val channelName = backStackEntry.arguments?.getString("channelName") ?: ""
+                val receiverId = backStackEntry.arguments?.getString("receiverId") ?: ""
+
+                Log.d("MainAppNav", "ChatScreenNav: channelId = '$channelId', channelName = '$channelName', receiverId = '$receiverId'")
+
+                if (channelId.isNotEmpty() && receiverId.isNotEmpty()) {
+                    ChatScreen(
+                        navController = navController,
+                        channelId = channelId,
+                        channelName = channelName,
+                        receiverId = receiverId
+                    )
+                } else {
+                    Text("Error: Required chat information is missing. channelId or receiverId is empty. ")
+                    Log.e("MainAppNav", "Error navigating to ChatScreen: Critical arguments missing. channelId = '$channelId', receiverId = '$receiverId'")
+                }
             }
-
         }
-
     }
 }

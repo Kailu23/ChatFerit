@@ -1,5 +1,6 @@
 package com.example.chatferit.feature.home
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,10 +35,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -47,49 +50,62 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.chatferit.model.Channel
 import com.example.chatferit.ui.theme.DarkGray
+import com.example.chatferit.util.getReceiverIdFromChannel
+import com.google.firebase.auth.FirebaseAuth
 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController) {
-    val viewModel = hiltViewModel<HomeViewModel>()
+
+    val viewModel: HomeViewModel = hiltViewModel()
     val channels by viewModel.channels.collectAsState()
+    val allUsers by viewModel.allUsers.collectAsState()
     val showDialogState by viewModel.showAddChannelDialog.collectAsState()
     val sheetState = rememberModalBottomSheetState()
     val selectedScreenRoute by viewModel.selectedScreenRoute.collectAsState()
     val currentSearchQuery by viewModel.searchQuery.collectAsState()
+    val currentUserId = remember { FirebaseAuth.getInstance().currentUser?.uid }
+    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     if (showDialogState) {
-        ModalBottomSheet(onDismissRequest = {viewModel.onDismissAddChannelDialog()}, sheetState = sheetState) {
+        ModalBottomSheet(
+            onDismissRequest = { viewModel.onDismissAddChannelDialog() },
+            sheetState = sheetState
+        ) {
             AddChannelDialog { channelName ->
-                viewModel.addChannel(channelName)
+                viewModel.addGroupChannel(channelName)
             }
         }
     }
 
-    Scaffold (
+    Scaffold(
         floatingActionButton = {
-            Box(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color.Blue.copy(alpha = 0.65f))
-                    .clickable()
-                    {
-                        viewModel.onAddChannelClicked()
-                    }
-            ){
-                Text(
-                    text = "Add channel",
-                    modifier = Modifier.padding(16.dp),
-                    color = Color.White
-                )
+            if (selectedScreenRoute == BottomNavItem.Chats.route) {
+                Box(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.Blue.copy(alpha = 0.65f))
+                        .clickable()
+                        {
+                            viewModel.onAddChannelClicked()
+                        }
+                ) {
+                    Text(
+                        text = "Add channel",
+                        modifier = Modifier.padding(16.dp),
+                        color = Color.White
+                    )
+                }
             }
         },
         containerColor = Color.Black,
         bottomBar = {
-            NavigationBar(containerColor = DarkGray,
-                ) {
+            NavigationBar(
+                containerColor = DarkGray,
+            ) {
                 bottomNavItemsList.forEach { item ->
                     NavigationBarItem(
                         selected = selectedScreenRoute == item.route,
@@ -99,7 +115,7 @@ fun HomeScreen(navController: NavController) {
                             }*/
                         },
                         icon = { Icon(item.icon, contentDescription = item.label) },
-                        label = {Text(item.label)},
+                        label = { Text(item.label) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedTextColor = Color.White,
                             unselectedTextColor = Color.DarkGray,
@@ -113,74 +129,94 @@ fun HomeScreen(navController: NavController) {
             }
         }
 
-    ){ paddingValues ->
-        Box(
+    ) { paddingValues ->
+        Column (
             modifier = Modifier
                 .padding(paddingValues)
                 .fillMaxSize()
         ) {
+            SearchBar(
+                searchQuery = currentSearchQuery,
+                onSearchQueryChanged = { query -> viewModel.onSearchQueryChanged(query) }
+            )
             ChatsScreenContent(
                 channels = channels,
                 searchQuery = currentSearchQuery,
-                onSearchQueryChanged = { query -> viewModel.onSearchQueryChanged(query) },
-                onChannelClick = { channelId, channelName -> navController.navigate("chat/$channelId&$channelName") })
+                onChannelClick = { channelId, channelName ->
+                    if (currentUserId == null) {
+                        Log.e("HomeScreen", "Cannot navigate: Current user ID is null.")
+                        return@ChatsScreenContent
+                    }
 
-            }
+                    val determinedReceiverId = getReceiverIdFromChannel(channelId, currentUserId)
+
+                    if (determinedReceiverId != null && determinedReceiverId.isNotEmpty()) {
+                        Log.d("HomeScreen", "Navigating to: chat/$channelId/$channelName/$determinedReceiverId")
+                        navController.navigate("chat/$channelId/$channelName/$determinedReceiverId")
+                    }
+                }
+            )
         }
     }
+}
+@Composable
+fun SearchBar(searchQuery: String, onSearchQueryChanged: (String) -> Unit) {
+    TextField(
+        value = searchQuery, onValueChange = {onSearchQueryChanged(it)},
+        placeholder = { Text(text = "Search") },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(40.dp)),
 
+        textStyle = TextStyle(color = Color.Gray),
+        colors = TextFieldDefaults.colors().copy(
+            focusedContainerColor = DarkGray,
+            unfocusedContainerColor = DarkGray,
+            focusedTextColor = Color.Gray,
+            unfocusedTextColor = Color.Gray,
+            focusedPlaceholderColor = Color.Gray,
+            unfocusedPlaceholderColor = Color.Gray,
+            focusedIndicatorColor = Color.Gray
+        ),
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Filled.Search,
+                contentDescription = null
+            ) }
+    )
+}
 
 @Composable
 fun ChatsScreenContent(
     channels: List<Channel>,
     searchQuery: String,
-    onSearchQueryChanged: (String) -> Unit,
     onChannelClick: (String, String) -> Unit
 ) {
+    if (channels.isEmpty()) {
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp), contentAlignment = Alignment.Center) {
+            Text(text = "No chats yet. Start a new one from the Users tab or create a group!")
+        }
+        return
+    }
     LazyColumn {
         item {
             Text(
-                text = "Messages",
+                text = "Chats",
                 color = Color.Gray,
                 style = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Black),
                 modifier = Modifier.padding(16.dp)
             )
         }
 
-        item {
-            TextField(
-                value = searchQuery, onValueChange = {onSearchQueryChanged(it)},
-                placeholder = { Text(text = "Search") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(40.dp)),
-
-                textStyle = TextStyle(color = Color.Gray),
-                colors = TextFieldDefaults.colors().copy(
-                    focusedContainerColor = DarkGray,
-                    unfocusedContainerColor = DarkGray,
-                    focusedTextColor = Color.Gray,
-                    unfocusedTextColor = Color.Gray,
-                    focusedPlaceholderColor = Color.Gray,
-                    unfocusedPlaceholderColor = Color.Gray,
-                    focusedIndicatorColor = Color.Gray
-                ),
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Filled.Search,
-                        contentDescription = null
-                    ) }
-            )
-        }
-
         items(channels.filter { it.name.contains(searchQuery, ignoreCase = true) }) { channel ->
-            Column {
-                ChannelItem(
-                    channelName = channel.name,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-                    onClick = { onChannelClick(channel.id, channel.name) })
-            }
+            ChannelItem(
+                channelName = channel.name,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                onClick = { onChannelClick(channel.id, channel.name) })
+
         }
     }
 
@@ -236,7 +272,7 @@ fun AddChannelDialog(onAddChannel: (String) -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ){
-        Text(text = "Add Channel", fontSize = 26.sp)
+        Text(text = "Add Group Channel", fontSize = 26.sp)
         Spacer(modifier = Modifier.padding(8.dp))
         TextField(
             value = channelName.value, onValueChange = {

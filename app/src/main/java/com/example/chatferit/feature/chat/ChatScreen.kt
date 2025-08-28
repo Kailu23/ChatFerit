@@ -52,120 +52,175 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import android.Manifest
+import android.hardware.lights.Light
+import android.widget.Toast
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import com.example.chatferit.feature.home.ChannelItem
+import kotlinx.coroutines.launch
 
 @Composable
-fun ChatScreen(navController: NavController, channelId : String, channelName : String) {
+fun ChatScreen(
+    navController: NavController,
+    channelId: String,
+    channelName: String,
+    receiverId: String
+) {
+    val viewModel: ChatViewModel = hiltViewModel()
+    val context = LocalContext.current
 
-    val viewModel : ChatViewModel = hiltViewModel()
-    Scaffold (
+    val selectDialog = remember { mutableStateOf(false) }
+    val cameraImageUri = remember {mutableStateOf<Uri?>(null)}
+
+    LaunchedEffect(Unit) {
+        viewModel.sendMessageError.collect { errorMessage ->
+            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+        }
+    }
+    LaunchedEffect(Unit) {
+        viewModel.decryptionError.collect { errorMessage ->
+            Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val cameraImageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            cameraImageUri.value?.let {
+                    viewModel.SendImageMessage(it, channelId, receiverId)
+            }
+        }
+    }
+
+    val imageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+            uri?.let { viewModel.SendImageMessage(it, channelId, receiverId) }
+    }
+
+    fun createImageUri(): Uri {
+        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val storageDir =
+            ContextCompat.getExternalFilesDirs(
+                context,
+                Environment.DIRECTORY_PICTURES
+            ).first()
+        return FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.provider",
+            File.createTempFile("JPEG_${timeStamp}_", ".jpg", storageDir).apply {
+                cameraImageUri.value = Uri.fromFile(this)
+            }
+        )
+    }
+
+    val permissionLauncher =
+        rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) {
+                cameraImageLauncher.launch(createImageUri())
+            } else {
+                Toast.makeText(context, "Camera permission denied", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+    Scaffold(
         containerColor = Color.Black
-    ){
+    ) {paddingValues ->
 
-        val selectDialog = remember { mutableStateOf(false) }
-        val cameraImageUri = remember {
-            mutableStateOf<Uri?>(null)
-        }
-        val cameraImageLauncher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.TakePicture()
-        ) { success ->
-            if (success) {
-                cameraImageUri.value?.let {
-                    viewModel.SendImageMessage(it, channelId)
-                }
-            }
-        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
 
-        val imageLauncher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.GetContent()
-        ) { uri: Uri? ->
-            uri?.let { viewModel.SendImageMessage(it, channelId) }
-        }
-
-        fun createImageUri(): Uri {
-            val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-            val storageDir =
-                ContextCompat.getExternalFilesDirs(
-                    navController.context,
-                    Environment.DIRECTORY_PICTURES
-                ).first()
-            return FileProvider.getUriForFile(
-                navController.context,
-                "${navController.context.packageName}.provider",
-                File.createTempFile("JPEG_${timeStamp}_", ".jpg", storageDir).apply {
-                    cameraImageUri.value = Uri.fromFile(this)
-                }
-            )
-        }
-        val permissionLauncher =
-            rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) { isGranted ->
-                if (isGranted) {
-                    cameraImageLauncher.launch(createImageUri())
-                }
-            }
-
-        Column (modifier = Modifier
-            .fillMaxSize()
-            .padding(it)){
-
-            LaunchedEffect(key1 = true) {
+            LaunchedEffect(key1 = channelId) {
                 viewModel.ListenForMessages(channelId)
             }
 
-            val messages = viewModel.messages.collectAsState()
+            val messages = viewModel.messages.collectAsState().value
 
             ChatMessages(
-                messages = messages.value,
-                onSendMessage = { message ->
-                    viewModel.SendMessage(channelId, message)
+                channelName =  channelName,
+                messages = messages,
+                onSendMessage = { textMessage, isEncrypted ->
+                    viewModel.SendMessage(channelId =  channelId, receiverId = receiverId, sendText = textMessage, isEncrypted = isEncrypted)
                 },
-                onImageClicked = { selectDialog.value = true }, channelName = channelName
+                onImageClicked = { selectDialog.value = true }
             )
         }
 
 
         if (selectDialog.value) {
-            ContentSelectionDialog(onCameraSelected = {
-                selectDialog.value = false
-                if (navController.context.checkSelfPermission(Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                    cameraImageLauncher.launch(createImageUri())
-                } else {
-                    permissionLauncher.launch(Manifest.permission.CAMERA)
-                }
+            ContentSelectionDialog(
+                onDismiss = { selectDialog.value = false },
+                onCameraSelected = {
+                    selectDialog.value = false
+                    when (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)) {
+                        android.content.pm.PackageManager.PERMISSION_GRANTED -> {
+                            cameraImageLauncher.launch(createImageUri())
+                        }
 
-            }, onGallerySelected = {
-                selectDialog.value = false
-                imageLauncher.launch("image/*")
-            })
+                        else -> {
+                            permissionLauncher.launch(Manifest.permission.CAMERA)
+                        }
+                    }
+                }, onGallerySelected = {
+                    selectDialog.value = false
+                    imageLauncher.launch("image/*")
+                }
+            )
         }
     }
 }
 
 @Composable
-fun ContentSelectionDialog(onCameraSelected: () -> Unit, onGallerySelected: () -> Unit) {
-    AlertDialog(onDismissRequest = {/*TODO()*/}, confirmButton = {
-        TextButton (onClick = onCameraSelected) {
-            Text(
-                text = "Camera",
-                color = DarkGray
-            )
-        }},
+fun ContentSelectionDialog(
+    onCameraSelected: () -> Unit,
+    onGallerySelected: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = { onDismiss },
+        confirmButton = {
+            TextButton(onClick = {
+                onCameraSelected()
+                onDismiss()
+            }) {
+                Text(
+                    text = "Camera",
+                    color = DarkGray
+                )
+            }
+        },
         dismissButton = {
-            TextButton (onClick = onGallerySelected) {
+            TextButton(onClick = {
+                onGallerySelected()
+                onDismiss()
+            }) {
                 Text(
                     text = "Gallery",
                     color = DarkGray
                 )
             }
-            }, title = {Text(text = "Select your source.")},
-        text = {Text(text = "Would you like to pick an image from the gallery or use the camera?") })
-
-
-
+        }, title = { Text(text = "Select your source.") },
+        text = { Text(text = "Would you like to pick an image from the gallery or use the camera?") })
 
 
 }
@@ -174,21 +229,43 @@ fun ContentSelectionDialog(onCameraSelected: () -> Unit, onGallerySelected: () -
 fun ChatMessages(
     channelName: String,
     messages: List<Message>,
-    onSendMessage: (String) -> Unit,
+    onSendMessage: (String, Boolean) -> Unit,
     onImageClicked: () -> Unit
 ) {
-    val message = remember { mutableStateOf("") }
+    var messageText by remember { mutableStateOf("") }
+    var sendEncrypted by remember { mutableStateOf(true) }
 
     val hideKeyboardController = LocalSoftwareKeyboardController.current
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            coroutineScope.launch {
+                listState.animateScrollToItem(messages.size - 1)
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
     ) {
-        LazyColumn(modifier = Modifier.weight(1f)) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(vertical = 8.dp)
+        ) {
             item {
-                ChannelItem(channelName, onClick = {}, modifier = Modifier)
+                ChannelItem(
+                    channelName,
+                    onClick = {},
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                )
             }
-            items(messages) { message ->
+            items(messages, key = {it.id}) { message ->
                 ChatBubble(message = message)
             }
         }
@@ -197,53 +274,69 @@ fun ChatMessages(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(DarkGray)
-                .padding(8.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(
-                onClick = {
-                    message.value = ""
-                    onImageClicked()
-                }
+                onClick = onImageClicked
             ) {
                 Image(
                     painter = painterResource(R.drawable.outline_attach_file_24),
                     contentDescription = "Attach File",
-                    alignment = Alignment.Center,
                     modifier = Modifier.size(24.dp)
                 )
             }
             TextField(
-                value = message.value, onValueChange = { message.value = it },
+                value = messageText, onValueChange = { messageText = it },
                 modifier = Modifier.weight(1f),
                 placeholder = { Text(text = "Type a message") },
-                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
+                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(
-                    onDone = {
-                        hideKeyboardController?.hide()
+                    onSend = {
+                        if (messageText.isNotBlank()) {
+                            onSendMessage(messageText, sendEncrypted)
+                            messageText = ""
+                            hideKeyboardController?.hide()
+                        }
                     }
                 ),
-                colors = TextFieldDefaults.colors().copy(
+                colors = TextFieldDefaults.colors(
                     focusedContainerColor = DarkGray,
                     unfocusedContainerColor = DarkGray,
+                    disabledContainerColor = DarkGray,
+                    cursorColor = Purple,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,
-                    focusedPlaceholderColor = Color.White,
-                    unfocusedPlaceholderColor = Color.White
+                    focusedPlaceholderColor = Color.Gray,
+                    unfocusedPlaceholderColor = Color.Gray
                 )
             )
+
+            IconButton(onClick = {sendEncrypted = !sendEncrypted}) {
+                Icon(
+                    imageVector = if(sendEncrypted) Icons.Filled.Lock else Icons.Filled.LockOpen,
+                    contentDescription = if(sendEncrypted) "Send Encrypted" else "Send Unencrypted",
+                    tint = if (sendEncrypted) Purple else Color.Gray,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
             IconButton(
                 onClick = {
-                    onSendMessage(message.value)
-                    message.value = ""
+                    if (messageText.isNotBlank()) {
+                        onSendMessage(messageText, sendEncrypted)
+                        messageText = ""
+                        hideKeyboardController?.hide()
+                    }
                 },
-                enabled = message.value.isNotEmpty()
+                enabled = messageText.isNotBlank()
             ) {
                 Image(
                     painter = painterResource(R.drawable.send),
                     contentDescription = "Send",
                     modifier = Modifier.size(24.dp),
-                    alignment = Alignment.Center
                 )
             }
         }
@@ -252,47 +345,72 @@ fun ChatMessages(
 
 @Composable
 fun ChatBubble(message: Message) {
-    val isCurrentUser = message.senderId == Firebase.auth.currentUser?.uid
-    val bubbleColor = if (isCurrentUser) {
-        Purple
-    } else {
-        DarkGray
-    }
-    Box (
+    val isCurrentUser: Boolean = message.senderId == Firebase.auth.currentUser?.uid
+    val bubbleColor = if (isCurrentUser) Purple else DarkGray
+    val textColor = Color.White
+
+    val bubbleAlignment = if (isCurrentUser) Alignment.CenterEnd else Alignment.CenterStart
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp, horizontal = 8.dp),
-    ){
-        val alignment = if (!isCurrentUser) Alignment.CenterStart else Alignment.CenterEnd
+        contentAlignment = bubbleAlignment
+    ) {
         Row(
             modifier = Modifier
-                .padding(8.dp)
+                .wrapContentWidth()
                 .background(color = bubbleColor, shape = RoundedCornerShape(16.dp))
-                .align(alignment),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(
+                    if (message.imageUrl != null) PaddingValues(8.dp) else PaddingValues(
+                        horizontal = 12.dp,
+                        vertical = 8.dp
+                    )
+                ),
+            verticalAlignment = Alignment.Top
         ) {
-            if (!isCurrentUser) {
+            if (!isCurrentUser && message.senderImage != null) {
+                AsyncImage(
+                    model = message.senderImage,
+                    contentDescription = "${message.senderName}'s avatar",
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(16.dp)),
+                    contentScale = ContentScale.Crop
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }else if (!isCurrentUser) {
                 Image(
                     painter = painterResource(id = R.drawable.ic_android_black_24dp),
                     contentDescription = null,
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(32.dp)
+                        .padding(end = 8.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
             }
-            Box(modifier = Modifier.padding(16.dp))
+            Column()
             {
+                if (!isCurrentUser && message.senderName != null) {
+                    Text(
+                        text = message.senderName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.LightGray,
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    )
+                }
                 if (message.imageUrl != null) {
                     AsyncImage(
                         model = message.imageUrl,
-                        contentDescription = null,
-                        modifier = Modifier.size(200.dp),
+                        contentDescription = "Send image",
+                        modifier = Modifier
+                            .sizeIn(maxWidth = 240.dp, maxHeight = 240.dp)
+                            .clip(RoundedCornerShape(12.dp)),
                         contentScale = ContentScale.Crop
                     )
-                }else {
+                } else {
                     Text(
-                        text = message.message.trim(),
-                        color = Color.White,
+                        text = message.message ?:"",
+                        color = textColor,
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
             }

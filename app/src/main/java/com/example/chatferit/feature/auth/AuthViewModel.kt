@@ -4,9 +4,14 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.chatferit.data.repository.UserRepository
+import com.example.chatferit.model.UserProfile
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.UserProfileChangeRequest
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ValueEventListener
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,10 +20,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
+
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val database: FirebaseDatabase
 ) : ViewModel(){
     private val _currentUser = MutableStateFlow<FirebaseUser?>(firebaseAuth.currentUser)
     val currentUser : StateFlow<FirebaseUser?> = _currentUser.asStateFlow()
@@ -85,6 +92,9 @@ class AuthViewModel @Inject constructor(
                         .setDisplayName(fullName)
                         .build()
                     firebaseUser.updateProfile(profileUpdates).await()
+
+                    createUserProfileInRtdb(firebaseUser, fullName)
+
                     Log.i(
                         "AuthViewModel",
                         "Sign up and profile update successful for user: ${firebaseUser.uid}."
@@ -125,6 +135,40 @@ class AuthViewModel @Inject constructor(
                 _authScreenState.value = AuthScreenState.AuthError(e.message?:"Sign in failed.")
             }
         }
+    }
+
+    private fun createUserProfileInRtdb(firebaseUser: FirebaseUser, fullName: String) {
+        val userId = firebaseUser.uid
+        val userEmail = firebaseUser.email ?: ""
+        val userProfileRef = database.getReference("users").child(userId)
+
+        userProfileRef.addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                if (!snapshot.exists()) {
+                    val newUserProfile = UserProfile(
+                        uid = userId,
+                        displayName = fullName,
+                        email = userEmail,
+                        createdAt = System.currentTimeMillis()
+                    )
+                    userProfileRef.setValue(newUserProfile)
+                        .addOnSuccessListener {
+                            Log.i("AuthViewModel", "User profile created in RTDB for $userId")
+                            performKeySetupIfNeeded(userId)
+                        }
+                        .addOnFailureListener { e ->
+                            Log.e("AuthViewModel", "Failed to create user profile in RTDB for $userId", e)
+                            _authScreenState.value = AuthScreenState.AuthError("Failed to save profile.")
+                        }
+                } else {
+                    Log.d("AuthViewModel", "User profile already exists in RTDB for $userId.")
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("AuthViewModel", "Error checking user profile in RTDB for $userId", error.toException())
+            }
+        })
     }
 
     fun signOut() {

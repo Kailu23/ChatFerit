@@ -24,6 +24,7 @@ import javax.inject.Singleton
 class UserRepository @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val database: FirebaseDatabase,
+    private val cryptoManager: CryptoManager
 ) : iUserRepository {
 
     companion object {
@@ -40,13 +41,14 @@ class UserRepository @Inject constructor(
                     onSuccess = { keys ->
                         if (keys != null) {
                             try {
-                                CryptoManager.getHybridPublicKeyHandle(appContext)
-                                CryptoManager.getSignatureVerificationKeyHandle(appContext)
+                                cryptoManager.getLocalUserHybridPublicKey()
+                                cryptoManager.getLocalUserSignaturePublicKey()
                                 keysSuccessfullyValidated = keys
                             } catch (e: Exception) {
                                 Log.w(
                                     "UserRepository",
-                                    "Local keys issue despite Firestore record for $userId. Regenerating."
+                                    "Local keys issue despite Firestore record for $userId. Regenerating.",
+                                    e
                                 )
                             }
                         }
@@ -60,19 +62,17 @@ class UserRepository @Inject constructor(
                 )
 
                 if (keysSuccessfullyValidated != null) {
-                    return@withContext Result.success(keysSuccessfullyValidated!!)
+                    Log.i("UserRepository", "Existing keys for user: $userId validated and are usable.")
+                    return@withContext Result.success(keysSuccessfullyValidated)
                 }
 
-                Log.i("UserRepositoryImpl", "Generating new E2EE keys for user: $userId")
+                Log.i("UserRepository", "Generating new E2EE keys for user: $userId")
 
-                val hybridPublicKeyHandle = CryptoManager.getHybridPublicKeyHandle(appContext)
                 val serializedHybridPublicKey =
-                    CryptoManager.serializeKeysetHandleToJson(hybridPublicKeyHandle)
+                    cryptoManager.getLocalUserHybridPublicKey()
 
-                val signatureVerificationKeyHandle =
-                    CryptoManager.getSignatureVerificationKeyHandle(appContext)
                 val serializedSignatureVerificationKey =
-                    CryptoManager.serializeKeysetHandleToJson(signatureVerificationKeyHandle)
+                    cryptoManager.getLocalUserSignaturePublicKey()
 
                 val publicKeysToStore = UserPublicKeys(
                     hybridPublicKey = serializedHybridPublicKey,
@@ -80,7 +80,7 @@ class UserRepository @Inject constructor(
                 )
 
                 userKeysRef.setValue(publicKeysToStore).await()
-                Log.i("UserRepositoryImpl", "Successfully stored new public keys for $userId in Realtime Database.")
+                Log.i("UserRepository", "Successfully stored new public keys for $userId in Realtime Database.")
 
                 Result.success(publicKeysToStore)
 
@@ -116,15 +116,15 @@ class UserRepository @Inject constructor(
                 if (publicKeys != null) {
                     return@withContext Result.success(publicKeys)
                 } else {
-                    Log.w("UserRepositoryImpl", "User public keys node for $userId exists but data is null or malformed in Realtime DB.")
+                    Log.w("UserRepository", "User public keys node for $userId exists but data is null or malformed in Realtime DB.")
                     Result.success(null)
                 }
             } else {
-                Log.i("UserRepositoryImpl", "No public keys node found for $userId in Realtime Database.")
+                Log.i("UserRepository", "No public keys node found for $userId in Realtime Database.")
                 Result.success(null)
             }
         } catch (e: Exception) {
-            Log.e("UserRepositoryImpl", "Error fetching public keys for $userId from Realtime Database", e)
+            Log.e("UserRepository", "Error fetching public keys for $userId from Realtime Database", e)
             Result.failure(Exception("Failed to retrieve user public keys from Realtime Database.", e))
         }
     }

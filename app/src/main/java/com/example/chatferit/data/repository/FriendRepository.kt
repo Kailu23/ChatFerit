@@ -108,9 +108,12 @@ class FriendRepository @Inject constructor(
         return try {
             val updates = mutableMapOf<String, Any?>()
 
-            updates["/$NODE_USERS/${request.senderId}/$NODE_FRIENDS/${request.senderId}"] = true
+            updates["/$NODE_USERS/${request.senderId}/$NODE_FRIENDS/${currentUserId}"] = true
             updates["/$NODE_USERS/${currentUserId}/$NODE_FRIENDS/${request.senderId}"] = true
             updates["/$NODE_FRIEND_REQUESTS/${currentUserId}/${request.senderId}"] = null
+
+            Log.d(TAG, "Accepting request. Current User (Acceptor): $currentUserId, Original Sender: ${request.senderId}")
+            Log.d(TAG, "Updates to be performed: $updates")
 
             firebaseDatabase.reference.updateChildren(updates).await()
             Log.d(TAG, "Friend request from ${request.senderName} accepted by $currentUserId")

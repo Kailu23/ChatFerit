@@ -5,13 +5,10 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.chatferit.data.repository.UserRepository
 import com.example.chatferit.data.repository.iUserRepository
 import com.example.chatferit.model.Message
 import com.example.chatferit.util.CryptoManager
-import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.auth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
@@ -66,88 +63,89 @@ class ChatViewModel @Inject constructor(
         val messagesRef = firebaseDatabase.reference.child("messages").child(channelId)
         val messagePushRef = messagesRef.push()
         val messageId = messagePushRef.key ?: UUID.randomUUID().toString()
-
-        val senderName = firebaseAuth.currentUser?.displayName
+        val currentSenderName = firebaseAuth.currentUser?.displayName
 
         if (isEncrypted) {
             viewModelScope.launch {
                 try {
                     val recipientKeysResult = userRepository.getUserPublicKeys(receiverId)
-                    recipientKeysResult.fold(
-                        onSuccess = { recipientPublicKeys ->
-                            if (recipientPublicKeys?.hybridPublicKey != null) {
-                                try {
-                                    val encryptedData = cryptoManager.encryptHybrid(
-                                        plaintext = sendText,
-                                        recipientPublicKey = recipientPublicKeys.hybridPublicKey
-                                    )
-                                    val message = Message(
-                                        id = messageId,
-                                        senderId = senderId,
-                                        senderName = senderName,
-                                        senderImage = null,
-                                        imageUrl = null,
-                                        encryptedMessage = encryptedData,
-                                        isMessageEncrypted = true,
-                                        message = null,
-                                        receiverId = receiverId,
-                                        createdAt = System.currentTimeMillis()
-                                    )
-                                    messagePushRef.setValue(message).addOnSuccessListener {
-                                        Log.d(
-                                            "ChatViewModel",
-                                            "E2EE Message sent to $channelId"
-                                        )
-                                    }.addOnFailureListener { e ->
-                                        Log.e(
-                                            "ChatViewModel",
-                                            "Failed to send E2EE Message to $channelId",
-                                            e
-                                        )
-                                        viewModelScope.launch { _sendMessageError.emit("Failed to send E2EE Message.") }
-                                    }
-                                } catch (e: Exception) {
-                                    Log.e(
-                                        "ChatViewModel",
-                                        "Encryption failed for message $messageId",
-                                        e
-                                    )
-                                    viewModelScope.launch { _sendMessageError.emit("Encryption failed") }
-                                }
-                            } else {
-                                Log.w(
+                    val senderKeysResult = userRepository.getUserPublicKeys(senderId)
+
+                    val recipientPublicKeys = recipientKeysResult.getOrNull()
+                    val senderPublicKeys = senderKeysResult.getOrNull()
+
+                    if (recipientPublicKeys?.hybridPublicKey != null && senderPublicKeys?.hybridPublicKey != null) {
+                        try {
+                            val ciphertextForRecipient = cryptoManager.encryptHybrid(
+                                plaintext = sendText,
+                                publicKey = recipientPublicKeys.hybridPublicKey
+                            )
+                            val ciphertextForSender = cryptoManager.encryptHybrid(
+                                plaintext = sendText,
+                                publicKey = senderPublicKeys.hybridPublicKey
+
+                            )
+                            val message = Message(
+                                id = messageId,
+                                senderId = senderId,
+                                senderName = currentSenderName,
+                                senderImage = null,
+                                imageUrl = null,
+                                encryptedMessageForSender = ciphertextForSender,
+                                encryptedMessageForRecipient = ciphertextForRecipient,
+                                messageEncrypted = true,
+                                plainTextMessage = null,
+                                receiverId = receiverId,
+                                createdAt = System.currentTimeMillis(),
+                            )
+                            messagePushRef.setValue(message).addOnSuccessListener {
+                                Log.d(
                                     "ChatViewModel",
-                                    "Recipient public key for E2EE not found for $receiverId."
+                                    "E2EE Message sent to $channelId"
                                 )
-                                viewModelScope.launch { _sendMessageError.emit("Cannot send secure message. Recipient's key unavailable.") }
+                            }.addOnFailureListener { e ->
+                                Log.e(
+                                    "ChatViewModel",
+                                    "Failed to send E2EE Message to $channelId",
+                                    e
+                                )
+                                viewModelScope.launch { _sendMessageError.emit("Failed to send E2EE Message.") }
                             }
-                        },
-                        onFailure = { exception ->
+                        } catch (e: Exception) {
                             Log.e(
                                 "ChatViewModel",
-                                "Failed to fetch recipient key for $receiverId for E2EE.",
-                                exception
+                                "Encryption failed for message $messageId",
+                                e
                             )
-                            viewModelScope.launch { _sendMessageError.emit("Error preparing secure message.") }
+                            viewModelScope.launch { _sendMessageError.emit("Encryption failed: ${e.message}") }
                         }
-                    )
+                    } else {
+                        var errorReason = "Key fetch failed: "
+                        if(recipientPublicKeys?.hybridPublicKey == null) errorReason += "Recipient key missing. "
+                        if(senderPublicKeys?.hybridPublicKey == null) errorReason += "Sender key missing for self-encryption. "
+                        Log.w("ChatViewModel", errorReason)
+                        viewModelScope.launch { _sendMessageError.emit(errorReason) }
+                    }
+
+
                 } catch (e: Exception) {
-                    Log.e("ChatViewModel", "Error in sendText (E2EE path)", e)
-                    viewModelScope.launch { _sendMessageError.emit("Unexpected error occurred.") }
+                    Log.e("ChatViewModel", "Error in sendText (E2EE path outer try-catch)", e)
+                    viewModelScope.launch { _sendMessageError.emit("Unexpected error occurred while preparing E2EE message.") }
                 }
             }
         } else {
             val message = Message(
                 id = messageId,
                 senderId = senderId,
-                senderName = senderName,
+                senderName = currentSenderName,
                 senderImage = null,
                 imageUrl = null,
-                encryptedMessage = null,
-                isMessageEncrypted = true,
-                message = sendText,
+                encryptedMessageForSender = null,
+                encryptedMessageForRecipient = null,
+                messageEncrypted = false,
+                plainTextMessage = sendText,
                 receiverId = receiverId,
-                createdAt = System.currentTimeMillis()
+                createdAt = System.currentTimeMillis(),
             )
             messagePushRef.setValue(message)
                 .addOnSuccessListener { Log.d("ChatViewModel", "Plaintext Message sent to $channelId") }
@@ -185,9 +183,10 @@ class ChatViewModel @Inject constructor(
                         senderName = senderName,
                         senderImage = null,
                         imageUrl = downloadUri,
-                        encryptedMessage = null,
-                        isMessageEncrypted = false,
-                        message = null,
+                        encryptedMessageForSender = null,
+                        encryptedMessageForRecipient = null,
+                        messageEncrypted = false,
+                        plainTextMessage = null,
                         receiverId = receiverId,
                         createdAt = System.currentTimeMillis()
                     )
@@ -215,46 +214,68 @@ class ChatViewModel @Inject constructor(
         val query = firebaseDatabase.getReference("messages").child(channelId).orderByChild("createdAt")
         messagesListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val newMessages = mutableListOf<Message>()
+                val newMessagesFromDb = mutableListOf<Message>()
                 snapshot.children.forEach { dataSnapshot ->
                     val firebaseMessage = dataSnapshot.getValue(Message::class.java)
                     firebaseMessage?.let { message ->
-                        if (message.isMessageEncrypted && message.encryptedMessage != null) {
+                        newMessagesFromDb.add(message.copy(id = dataSnapshot.key ?: message.id))
+                    }
+                }
+                val processedMessages = newMessagesFromDb.mapNotNull { firebaseMessage ->
+                    var finalDisplayContent: String?
+                    var successfullyProcessed = true
+
+                    if (firebaseMessage.messageEncrypted) {
+                        val cipherText: String? =
+                            if(firebaseMessage.senderId == currentUserId) {
+                                firebaseMessage.encryptedMessageForSender
+                            } else {
+                                firebaseMessage.encryptedMessageForRecipient
+                            }
+                        if (cipherText != null) {
                             try {
-                                val decryptedText =
-                                    cryptoManager.decryptHybrid(message.encryptedMessage)
-                                newMessages.add(
-                                    message.copy(message = decryptedText, encryptedMessage = null)
-                                )
+                                finalDisplayContent = cryptoManager.decryptHybrid(cipherText)
                             } catch (e: Exception) {
                                 Log.e(
                                     "ChatViewModel",
-                                    "Decryption failed for message ${message.id}",
+                                    "Decryption failed for message ${firebaseMessage.id}",
                                     e
                                 )
                                 viewModelScope.launch { _decryptionError.emit("Could not decrypt message.") }
-                                newMessages.add(
-                                    message.copy(
-                                        message = "[Message decryption failed]",
-                                        encryptedMessage = null
-                                    )
-                                )
+                                finalDisplayContent = "[Decryption failed]"
+                                successfullyProcessed = false
                             }
                         } else {
-                            newMessages.add(message)
+                            Log.w("ChatViewModel", "E2EE Message ${firebaseMessage.id} missing relevant cipthertext")
+                            finalDisplayContent = "[Encrypted: Data Missing]"
                         }
+                    } else if (firebaseMessage.imageUrl != null) {
+                        finalDisplayContent = null
+                    } else {
+                        finalDisplayContent = firebaseMessage.plainTextMessage
                     }
-                }
-                _messages.value = newMessages
-            }
 
+                    if (successfullyProcessed || finalDisplayContent != null || firebaseMessage.imageUrl != null) {
+                        firebaseMessage.copy(
+                            plainTextMessage = finalDisplayContent,
+                            messageEncrypted = false,
+                            encryptedMessageForSender = null,
+                            encryptedMessageForRecipient = null
+                        )
+                    }
+                    else {
+                        Log.e("ChatViewModel", "Message ${firebaseMessage.id} couldn't be processed for UI")
+                        null
+                    }
+                }. sortedBy{it.createdAt}
+                _messages.value = processedMessages
+            }
             override fun onCancelled(error: DatabaseError) {
                 Log.w("ChatViewModel", "Listen for messages cancelled for $channelId", error.toException())
             }
         }
         query.addValueEventListener(messagesListener!!)
         SubscribeForNotification(channelId)
-
     }
     private fun clearMessageListener() {
         currentListeningChannelId?.let {

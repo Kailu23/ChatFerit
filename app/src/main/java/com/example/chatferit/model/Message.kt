@@ -8,13 +8,13 @@ data class Message(
     val imageUrl: String? = null,
 
     //Encrypted
-    val encryptedMessage: String? = null,
-    val isMessageEncrypted: Boolean = false,
+    val encryptedMessageForSender: String? = null,
+    val encryptedMessageForRecipient: String? = null,
+    val messageEncrypted: Boolean = false,
 
-    val message: String? = null,
+    val plainTextMessage: String? = null,
 
     val receiverId: String? = null,
-
     val createdAt: Long = System.currentTimeMillis()
 ){
     constructor() : this(
@@ -23,9 +23,10 @@ data class Message(
         senderName = null,
         senderImage = null,
         imageUrl = null,
-        encryptedMessage = null,
-        isMessageEncrypted = false,
-        message = null,
+        encryptedMessageForSender = null,
+        encryptedMessageForRecipient = null,
+        messageEncrypted = false,
+        plainTextMessage = null,
         receiverId = null,
         createdAt = 0L
     )

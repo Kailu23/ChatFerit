@@ -144,13 +144,13 @@ fun HomeScreen(navController: NavController) {
                 .padding(paddingValues)
                 .fillMaxSize()
         ) {
-            SearchBar(
-                searchQuery = currentSearchQuery,
-                onSearchQueryChanged = { query -> viewModel.onSearchQueryChanged(query) }
-            )
 
             when (selectedScreenRoute) {
                 BottomNavItem.Chats.route -> {
+                    SearchBar(
+                        searchQuery = currentSearchQuery,
+                        onSearchQueryChanged = { query -> viewModel.onSearchQueryChanged(query) }
+                    )
                     ChatsScreenContent(
                         channels = channels,
                         searchQuery = currentSearchQuery,

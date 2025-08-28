@@ -70,8 +70,8 @@ class CryptoManager @Inject constructor(
     }
 
     @Throws(GeneralSecurityException::class, IOException::class)
-    fun encryptHybrid(plaintext: String, recipientPublicKey: String): String {
-        val recipientPublicKeysetHandle = deserializeJsonToKeysetHandle(recipientPublicKey)
+    fun encryptHybrid(plaintext: String, publicKey: String): String {
+        val recipientPublicKeysetHandle = deserializeJsonToKeysetHandle(publicKey)
         val hybridEncrypt = recipientPublicKeysetHandle.getPrimitive(HybridEncrypt::class.java)
         val plaintextBytes = plaintext.toByteArray(StandardCharsets.UTF_8)
         val ciphertextBytes = hybridEncrypt.encrypt(plaintextBytes, HYBRID_CONTEXT_INFO)

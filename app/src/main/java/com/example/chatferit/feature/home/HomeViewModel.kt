@@ -82,6 +82,9 @@ class HomeViewModel @Inject constructor(
     private val _snackbarMessage = MutableStateFlow<String?>(null)
     val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
 
+    private val _navigateToLogin = MutableStateFlow<Boolean>(false)
+    val navigateToLogin: StateFlow<Boolean> = _navigateToLogin.asStateFlow()
+
     val actualFriends: StateFlow<List<UserProfile>> = combine(
         _allUsers,
         _friendUids,
@@ -527,5 +530,24 @@ class HomeViewModel @Inject constructor(
         _snackbarMessage.value = null
     }
 
+    fun logoutUser() {
+        firebaseAuth.signOut()
+        _privateChannels.value = emptyList()
+        _groupChannels.value = emptyList()
+        _friendUids.value = emptySet()
+        _incomingFriendRequests.value = emptyList()
+        _sentFriendRequests.value = emptyList()
+        _allUsers.value = emptyList()
+        _searchQuery.value = ""
+        clearAddFriendSearch()
+        _snackbarMessage.value = "Logged out successfully." // Optional feedback
 
+        // Signal navigation
+        _navigateToLogin.value = true
+        Log.d("HomeViewModel", "User logged out.")
+    }
+
+    fun onLoginNavigationComplete() {
+        _navigateToLogin.value = false
+    }
 }

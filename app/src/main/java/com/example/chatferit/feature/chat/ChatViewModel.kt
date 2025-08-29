@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.chatferit.data.repository.iUserRepository
 import com.example.chatferit.model.Message
+import com.example.chatferit.notifications.NotificationHelper
 import com.example.chatferit.util.CryptoManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
@@ -34,6 +35,7 @@ class ChatViewModel @Inject constructor(
     private val firebaseStorage: FirebaseStorage,
     private val userRepository: iUserRepository,
     private val cryptoManager: CryptoManager,
+    private val notificationHelper: NotificationHelper,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
@@ -46,9 +48,15 @@ class ChatViewModel @Inject constructor(
     val sendMessageError : SharedFlow<String> = _sendMessageError.asSharedFlow()
 
     private var messagesListener: ValueEventListener? = null
-    private var currentListeningChannelId: String? = null
+    private val _currentListeningChannelId = MutableStateFlow<String?>(null)
+    val currentListeningChannelId: StateFlow<String?> = _currentListeningChannelId.asStateFlow()
 
     private val currentUserId: String? get() = firebaseAuth.currentUser?.uid
+
+    private var lastNotifiedMessageTimestampPerChannel = mutableMapOf<String, Long>()
+
+    private val _isUserViewingCurrentChat = MutableStateFlow(false)
+
 
     fun SendMessage(channelId: String, receiverId: String, sendText: String, isEncrypted: Boolean) {
         val senderId = currentUserId ?: run{
@@ -204,12 +212,15 @@ class ChatViewModel @Inject constructor(
     }
 
     fun ListenForMessages(channelId : String) {
-        if (currentListeningChannelId == channelId && messagesListener != null) {
+        if (_currentListeningChannelId.value == channelId && messagesListener != null) {
             Log.d("ChatViewModel", "Already listening for messages in channel $channelId")
             return
         }
         clearMessageListener()
-        currentListeningChannelId = channelId
+        _currentListeningChannelId.value = channelId
+
+        var lastNotifiedMessageTimestamp: Long = 0L
+        var isInitalLoad = true
 
         val query = firebaseDatabase.getReference("messages").child(channelId).orderByChild("createdAt")
         messagesListener = object : ValueEventListener {
@@ -255,7 +266,7 @@ class ChatViewModel @Inject constructor(
                         finalDisplayContent = firebaseMessage.plainTextMessage
                     }
 
-                    if (successfullyProcessed || finalDisplayContent != null || firebaseMessage.imageUrl != null) {
+                    if (successfullyProcessed || firebaseMessage.imageUrl != null) {
                         firebaseMessage.copy(
                             plainTextMessage = finalDisplayContent,
                             messageEncrypted = false,
@@ -269,6 +280,8 @@ class ChatViewModel @Inject constructor(
                     }
                 }. sortedBy{it.createdAt}
                 _messages.value = processedMessages
+
+                IncomingMessageNotifications(messages = processedMessages, channelId = channelId)
             }
             override fun onCancelled(error: DatabaseError) {
                 Log.w("ChatViewModel", "Listen for messages cancelled for $channelId", error.toException())
@@ -277,15 +290,12 @@ class ChatViewModel @Inject constructor(
         query.addValueEventListener(messagesListener!!)
         SubscribeForNotification(channelId)
     }
-    private fun clearMessageListener() {
-        currentListeningChannelId?.let {
-            if (messagesListener != null) {
-                firebaseDatabase.getReference("messages").child(it).removeEventListener(messagesListener!!)
-                Log.d("ChatViewModel", "Removed message listener for channel $it")
-            }
+
+    fun setUserViewingChat(isViewing: Boolean) {
+        _isUserViewingCurrentChat.value = isViewing
+        if (isViewing && _currentListeningChannelId != null) {
+            lastNotifiedMessageTimestampPerChannel[_currentListeningChannelId.value!!] = System.currentTimeMillis()
         }
-        messagesListener = null
-        currentListeningChannelId = null
     }
 
     private fun SubscribeForNotification(channelId : String) {
@@ -296,6 +306,57 @@ class ChatViewModel @Inject constructor(
                 Log.d("ChatViewMOdel", "Failed to subscribe to topic: group_$channelId")
             }
         }
+    }
+    private fun IncomingMessageNotifications(messages: List<Message>, channelId: String) {
+        if(messages.isEmpty()) return
+
+        val latestMessage = messages.last()
+        val currentUser = firebaseAuth.currentUser ?:  return
+
+        val lastNotifiedTimestamp: Long = lastNotifiedMessageTimestampPerChannel[channelId] ?: 0L
+
+        val isNotFromCurrentUser = latestMessage.senderId != currentUserId
+        val isInChat = _isUserViewingCurrentChat.value && _currentListeningChannelId.value == channelId
+
+        val shouldNotify = isNotFromCurrentUser && !isInChat
+
+        if (shouldNotify) {
+            Log.d(
+                "ChatViewModel",
+                "Notifying for message: ${latestMessage.id} in channel $channelId"
+            )
+
+            val notificationMessageBody = if (latestMessage.imageUrl != null) {
+                "${latestMessage.senderName ?: "Someone"} sent an image."
+            } else {
+                latestMessage.plainTextMessage ?: "[Message content unavailable]"
+            }
+
+            val notificationTitle = latestMessage.senderName
+
+            /*notificationHelper.showSimpleNotification(
+                notificationId = NotificationConstants.NOTIFICATION_ID_NEW_MESSAGE + channelId.hashCode(),
+                channelId = NotificationConstants.CHANNEL_ID_HIGH_IMPORTANCE,
+                title = latestMessage.senderName ?: "Friend",
+                message = notificationMessageBody,
+            )*/
+            lastNotifiedMessageTimestampPerChannel[channelId] = latestMessage.createdAt
+        } else {
+            if (!isNotFromCurrentUser) Log.d("ChatViewModel", "Notification suppressed (from self) for ${latestMessage.id}")
+            if (isInChat) Log.d("ChatViewModel", "Notification suppressed (user viewing chat) for ${latestMessage.id}")
+        }
+    }
+
+    private fun clearMessageListener() {
+        val channelToClear = this._currentListeningChannelId
+        channelToClear?.value.let { channelId ->
+            if (messagesListener != null) {
+                firebaseDatabase.getReference("messages").child(channelId ?: "").removeEventListener(messagesListener!!)
+                Log.d("ChatViewModel", "Removed message listener for channel $channelId")
+            }
+        }
+        messagesListener = null
+        this._currentListeningChannelId.value = null
     }
 
     override fun onCleared() {

@@ -105,7 +105,7 @@ fun UsersTabContent(
             SectionTitle("Your friends (${friendsList.size})")
             OutlinedTextField(
                 value = searchQuery,
-                onValueChange = { onSearchQueryChanged },
+                onValueChange = { onSearchQueryChanged(it) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),

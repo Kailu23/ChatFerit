@@ -50,8 +50,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.chatferit.feature.users.UsersTabContent
 import com.example.chatferit.model.Channel
+import com.example.chatferit.model.UserProfile
 import com.example.chatferit.ui.theme.DarkGray
-import com.example.chatferit.util.getReceiverIdFromChannel
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
@@ -62,7 +62,8 @@ fun HomeScreen(navController: NavController) {
 
     val viewModel: HomeViewModel = hiltViewModel()
 
-    val channels by viewModel.channels.collectAsState()
+    val privateChats by viewModel.privateChannels.collectAsState()
+    val groupsChats by viewModel.groupChannels.collectAsState()
     val selectedScreenRoute by viewModel.selectedScreenRoute.collectAsState()
     val currentUserId = remember { FirebaseAuth.getInstance().currentUser?.uid }
     val coroutineScope = rememberCoroutineScope()
@@ -91,7 +92,7 @@ fun HomeScreen(navController: NavController) {
 
     Scaffold(
         floatingActionButton = {
-            if (selectedScreenRoute == BottomNavItem.Chats.route) {
+            if (selectedScreenRoute == BottomNavItem.Groups.route) {
                 Box(
                     modifier = Modifier
                         .padding(16.dp)
@@ -152,23 +153,20 @@ fun HomeScreen(navController: NavController) {
                         onSearchQueryChanged = { query -> viewModel.onSearchQueryChanged(query) }
                     )
                     ChatsScreenContent(
-                        channels = channels,
+                        privateChats = privateChats,
                         searchQuery = currentSearchQuery,
-                        onChannelClick = { channelId, channelName ->
+                        currentUserId = currentUserId,
+                        allUsers = viewModel.allUsers.collectAsState().value,
+                        onChannelClick = { channelId, displayName, receiverId ->
                             if (currentUserId == null) {
                                 Log.e("HomeScreen", "Cannot navigate: Current user ID is null.")
                                 return@ChatsScreenContent
                             }
 
-                            val determinedReceiverId =
-                                getReceiverIdFromChannel(channelId, currentUserId)
-
-                            if (determinedReceiverId != null && determinedReceiverId.isNotEmpty()) {
-                                Log.d(
-                                    "HomeScreen",
-                                    "Navigating to: chat/$channelId/$channelName/$determinedReceiverId"
-                                )
-                                navController.navigate("chat/$channelId/$channelName/$determinedReceiverId")
+                            if (receiverId.isNotEmpty()) {
+                                navController.navigate("chat/$channelId/$displayName/$receiverId")
+                            } else {
+                                Log.e("HomeScreen", "Cannot navigate: Receiver ID is empty for: $channelId")
                             }
                         }
                     )
@@ -233,33 +231,79 @@ fun SearchBar(searchQuery: String, onSearchQueryChanged: (String) -> Unit) {
 
 @Composable
 fun ChatsScreenContent(
-    channels: List<Channel>,
+    privateChats: List<Channel>,
     searchQuery: String,
-    onChannelClick: (String, String) -> Unit
+    currentUserId: String?,
+    allUsers: List<UserProfile>,
+    onChannelClick: (channelId: String, displayName: String, receiverId: String) -> Unit
 ) {
-    if (channels.isEmpty()) {
+    if (privateChats.isEmpty()) {
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(16.dp), contentAlignment = Alignment.Center) {
-            Text(text = "No chats yet. Start a new one from the Users tab or create a group!")
+            Text(text = "No private chats yet. Start a new one from the Users tab!")
         }
         return
     }
+
+    val chatDisplayItems = remember(privateChats, currentUserId, allUsers) {
+        privateChats.mapNotNull { channel ->
+            var displayName: String
+
+            val otherParticipantId = channel.participants?.keys?.firstOrNull { it != currentUserId }
+
+            if (otherParticipantId != null) {
+                displayName = channel.participants.get(otherParticipantId)?.displayName ?: "Chat"
+                if (displayName == null) {
+                    displayName = channel.name
+
+                }
+                ChannelDisplayWrapper(channel = channel, displayName = displayName, navigationReceiverId = otherParticipantId)
+            } else {
+                Log.w(
+                    "ChatsScreenContent",
+                    "Private channel ${channel.id} missing other participant id."
+                )
+                null
+            }
+        }
+    }
+
+    val filteredChats = if (searchQuery.isBlank()) {
+        chatDisplayItems
+    } else {
+        chatDisplayItems.filter { channel ->
+            channel.displayName.contains(searchQuery, ignoreCase = true)
+        }
+    }
+
+    if (filteredChats.isEmpty()) {
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp), contentAlignment = Alignment.Center) {
+            Text(text = "No chats found for \"$searchQuery\"")
+        }
+    }
+
     LazyColumn {
         item {
             Text(
-                text = "Chats",
+                text = "Private Chats",
                 color = Color.Gray,
                 style = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Black),
                 modifier = Modifier.padding(16.dp)
             )
         }
 
-        items(channels.filter { it.name.contains(searchQuery, ignoreCase = true) }) { channel ->
+        items(filteredChats, key = {it.channel.id}) { itemWrapper->
             ChannelItem(
-                channelName = channel.name,
+                channelName = itemWrapper.displayName,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-                onClick = { onChannelClick(channel.id, channel.name) })
+                onClick = { onChannelClick(
+                    itemWrapper.channel.id,
+                    itemWrapper.displayName,
+                    itemWrapper.navigationReceiverId
+                ) })
 
         }
     }
@@ -333,3 +377,9 @@ fun AddChannelDialog(onAddChannel: (String) -> Unit) {
     }
 
 }
+
+private data class ChannelDisplayWrapper(
+    val channel: Channel,
+    val displayName: String,
+    val navigationReceiverId: String
+)

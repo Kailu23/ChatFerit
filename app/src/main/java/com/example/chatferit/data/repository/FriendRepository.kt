@@ -37,9 +37,9 @@ class FriendRepository @Inject constructor(
         return try {
             val currentUserProfileSnapshot =
                 firebaseDatabase.getReference(NODE_USERS)
-                    .child(currentUserId).child("displayName")
+                    .child(currentUserId)
                     .get().await()
-            val currentUserName = currentUserProfileSnapshot as? String ?: "A user"
+            val currentUserName : String = currentUserProfileSnapshot.child("displayName").getValue(String::class.java) ?: "A user"
 
            val currentUserImageSnapshot =
                 firebaseDatabase.getReference(NODE_USERS).child(currentUserId)

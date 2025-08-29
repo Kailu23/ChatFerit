@@ -8,6 +8,7 @@ import com.example.chatferit.data.repository.iFriendRepository
 import com.example.chatferit.model.Channel
 import com.example.chatferit.model.ChannelType
 import com.example.chatferit.model.FriendRequest
+import com.example.chatferit.model.ParticipantDetails
 import com.example.chatferit.model.UserProfile
 import com.example.chatferit.util.Resource
 import com.google.firebase.auth.FirebaseAuth
@@ -35,8 +36,11 @@ class HomeViewModel @Inject constructor(
     private val friendRepository: iFriendRepository
 ) : ViewModel() {
 
-    private val _channels = MutableStateFlow<List<Channel>>(emptyList())
-    val channels = _channels.asStateFlow()
+    private val _privateChannels = MutableStateFlow<List<Channel>>(emptyList())
+    val privateChannels = _privateChannels.asStateFlow()
+
+    private val _groupChannels = MutableStateFlow<List<Channel>>(emptyList())
+    val groupChannels: StateFlow<List<Channel>> = _groupChannels.asStateFlow()
 
     private val _selectedScreenRoute = MutableStateFlow(BottomNavItem.Chats.route) // Default to Chats
     val selectedScreenRoute = _selectedScreenRoute.asStateFlow()
@@ -76,39 +80,72 @@ class HomeViewModel @Inject constructor(
 
 
     init {
-        listenForChannels()
+        listenForUserPrivateChannels()
+        listenForUserGroupChannels()
         listenForAllUsers()
         listenForCurrentUserFriends()
         listenForIncomingFriendRequests()
     }
 
-    private fun listenForChannels() {
-        val currentUid = currentUserId ?: run {
-            Log.w("HomeViewModel", "User not logged in, cannot listen for channels.")
-            _channels.value = emptyList()
+    private fun listenForUserPrivateChannels() {
+        val currentUserId = currentUserId ?: run {
+            Log.w("HomeViewModel", "User not logged in, cannot listen for private channels.")
+            _privateChannels.value = emptyList()
             return
         }
+
         val ref = firebaseDatabase.getReference("channels")
-        ref.addValueEventListener(object : ValueEventListener {
+        ref.orderByChild("type").equalTo(ChannelType.PRIVATE).addValueEventListener(object : ValueEventListener{
             override fun onDataChange(snapshot: DataSnapshot) {
                 val channelList = mutableListOf<Channel>()
                 snapshot.children.forEach { dataSnapshot ->
                     try {
-                        val channel = dataSnapshot.getValue(Channel::class.java)?.copy(id = dataSnapshot.key ?: "")
-                        if (channel != null) {
-                            if (channel.type == ChannelType.GROUP || channel.type == ChannelType.PRIVATE && channel.participants?.containsKey(currentUid) == true) {
-                                channelList.add(channel)
-                            }
+                        val channel = dataSnapshot.getValue(Channel::class.java)?.copy(id = dataSnapshot?.key ?: "")
+
+                        if (channel != null && channel.type == ChannelType.PRIVATE &&
+                            channel.participants?.containsKey(currentUserId) == true) {
+                            channelList.add(channel)
                         }
                     } catch (e: Exception) {
-                        Log.e("HomeViewModel", "Error deserializing channel: ${dataSnapshot.key}", e)
+                        Log.e("HomeViewModel", "Error deserializing private channel: ${dataSnapshot.key}", e)
                     }
                 }
-                _channels.value = channelList.sortedByDescending { it.createdAt }
+                _privateChannels.value = channelList.sortedByDescending { it.createdAt }
             }
 
             override fun onCancelled(error: DatabaseError) {
-                Log.e("HomeViewModel", "Firebase channel listener cancelled", error.toException())
+                Log.e("HomeViewModel", "Firebase private channels listener cancelled.", error.toException())
+            }
+        })
+    }
+
+    private fun listenForUserGroupChannels() {
+        val currentUid = currentUserId ?: run {
+            Log.w("HomeViewModel", "User not logged in, cannot listen for private channels.")
+            _privateChannels.value = emptyList()
+            return
+        }
+        val ref = firebaseDatabase.getReference("groupChannels")
+        ref.orderByChild("type").equalTo(ChannelType.GROUP).addValueEventListener(object : ValueEventListener{
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val channelList = mutableListOf<Channel>()
+                snapshot.children.forEach { dataSnapshot ->
+                    try {
+                        val channel = dataSnapshot.getValue(Channel::class.java)?.copy(id = dataSnapshot?.key ?: "")
+
+                        if (channel != null && channel.type == ChannelType.GROUP &&
+                            channel.participants?.containsKey(currentUserId) == true) {
+                            channelList.add(channel)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("HomeViewModel", "Error deserializing group channel: ${dataSnapshot.key}", e)
+                    }
+                }
+                _groupChannels.value = channelList.sortedByDescending { it.createdAt }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("HomeViewModel", "Firebase group channels listener cancelled.", error.toException())
             }
         })
     }
@@ -151,21 +188,28 @@ class HomeViewModel @Inject constructor(
         })
     }
     fun addGroupChannel(name: String) {
+        val currentUserId = firebaseAuth.currentUser?.uid ?: return
+        val currentUserDisplayName = firebaseAuth?.currentUser?.displayName ?: "Unknown"
         if (name.isBlank()) {
             Log.w("Add Channel", "Channel name cannot be blank.")
             return
         }
-        val channelRef = firebaseDatabase.getReference("channel").push()
+
+        val channelRef = firebaseDatabase.getReference("groupChannels").push()
         val channelId = channelRef.key ?: run {
             Log.e("Add Channel", "Failed to generate key for group channel")
             return
         }
 
+        val initialParticipantDetails = ParticipantDetails(displayName = currentUserDisplayName)
+
         val newChannel = Channel(
             id = channelId,
             name = name,
             type = ChannelType.GROUP,
-            createdAt = System.currentTimeMillis()
+            participants = mapOf(currentUserId to initialParticipantDetails),
+            createdAt = System.currentTimeMillis(),
+            createdBy = currentUserId,
         )
 
         channelRef.setValue(newChannel)
@@ -178,7 +222,7 @@ class HomeViewModel @Inject constructor(
             }
     }
 
-    suspend fun getOrCreatePrivateChannel(otherUserUid: String): Result<Pair<String, String>> {
+    suspend fun getOrCreatePrivateChannel(otherUserUid: String): Result<Pair<String, String?>> {
         val currentUserUid = currentUserId ?: return Result.failure(Exception("User not logged in. Cannot create/get 1-to-1 channel."))
         if (currentUserUid == otherUserUid) return Result.failure(Exception("Cannot create a chat with yourself."))
         if (otherUserUid.isBlank()) return Result.failure(Exception("Other user ID is blank."))
@@ -190,25 +234,46 @@ class HomeViewModel @Inject constructor(
         return try {
             val snapshot = channelRef.get().await()
             if (snapshot.exists()) {
-                val existingChannel = snapshot.getValue(Channel::class.java)
+                var existingChannel = snapshot.getValue(Channel::class.java)
+                var channelName = existingChannel?.name
 
-                val channelName = existingChannel?.name ?: "Chat with ${getDisplayNameForUser(otherUserUid)}"
+                if (existingChannel?.type == ChannelType.PRIVATE) {
+                    val otherParticipantId = existingChannel.participants?.keys?.firstOrNull { it != currentUserUid }
+                    if (otherParticipantId != null) {
+                        val otherParticipantDetails = existingChannel.participants[otherParticipantId]
+                        channelName = otherParticipantDetails?.displayName ?: getDisplayNameForUser(otherUserUid)
+                    }
+                } else if (channelName.isNullOrBlank() && existingChannel?.type == ChannelType.PRIVATE) {
+                    val otherParticipantId = existingChannel.participants?.keys?.firstOrNull { it != currentUserUid }
+                    if (otherParticipantId != null) {
+                        channelName = getDisplayNameForUser(otherParticipantId)
+                    } else {
+                        channelName = "Chat"
+                    }
+                }
+
                 Log.d("HomeViewModel", "Found existing PRIVATE channel: $channelId")
                 Result.success(Pair(channelId, channelName))
             } else {
-                val otherUserName = getDisplayNameForUser(otherUserUid) // Placeholder
-                val channelName = "Chat with $otherUserName"
+                val currentUserDisplayName = getDisplayNameForUser(currentUserUid)
+                val otherUserDisplayName = getDisplayNameForUser(otherUserUid)
+
+                val initialChannelName = otherUserDisplayName
 
                 val newChannel = Channel(
                     id = channelId,
-                    name = channelName,
+                    name = initialChannelName,
                     type = ChannelType.PRIVATE,
-                    participants = mapOf(currentUserUid to true, otherUserUid to true),
+                    participants = mapOf(
+                        currentUserUid to ParticipantDetails(displayName = currentUserDisplayName),
+                        otherUserUid to ParticipantDetails(displayName = otherUserDisplayName)
+                    ),
+                    createdBy = currentUserId,
                     createdAt = System.currentTimeMillis()
                 )
                 channelRef.setValue(newChannel).await()
                 Log.d("HomeViewModel", "Created new PRIVATE channel: $channelId")
-                Result.success(Pair(channelId, channelName))
+                Result.success(Pair(channelId, otherUserDisplayName))
             }
         } catch (e: Exception) {
             Log.e("HomeViewModel", "Error in getOrCreateOneToOneChannel for otherUserUid: $otherUserUid", e)
@@ -275,9 +340,9 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun submitSendFriendRequest(targetUserIdentifier: String) { // e.g., email or UID
+    fun submitSendFriendRequest(targetUserIdentifier: String) {
         viewModelScope.launch {
-            val currentFbUserUid = firebaseAuth.currentUser?.uid ?: return@launch
+            val currentFirebaseUserId = firebaseAuth.currentUser?.uid ?: return@launch
             if (targetUserIdentifier.isBlank()) {
                 Log.w("HomeViewModel", "Target user identifier is blank.")
                 return@launch
@@ -285,12 +350,12 @@ class HomeViewModel @Inject constructor(
 
             val targetUid = targetUserIdentifier
 
-            if (targetUid == currentFbUserUid) {
+            if (targetUid == currentFirebaseUserId) {
                 Log.w("HomeViewModel", "Cannot send a friend request to yourself.")
                 return@launch
             }
 
-            val result = friendRepository.sendFriendRequest(currentFbUserUid, targetUid)
+            val result = friendRepository.sendFriendRequest(currentFirebaseUserId, targetUid)
 
             when(result){
                 is Resource.Success -> {

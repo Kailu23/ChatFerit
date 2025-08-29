@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.example.chatferit.model.UserPublicKeys
 import com.example.chatferit.util.CryptoManager
+import com.google.firebase.database.DatabaseException
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ktx.getValue
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -11,13 +12,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import okio.IOException
-import java.lang.Exception
 import java.security.GeneralSecurityException
 import javax.inject.Inject
 import javax.inject.Singleton
-
-
-
 
 
 @Singleton
@@ -33,78 +30,130 @@ class UserRepository @Inject constructor(
     }
 
     override suspend fun setupUserKeysIfNeeded(userId: String): Result<UserPublicKeys> = withContext(Dispatchers.IO) {
+        try {
+            Log.d("UserRepository", "Starting setupUserKeysIfNeeded for $userId")
+
+            val currentLocalHybridPublicKey: String
+            val currentLocalSignaturePublicKey: String
+
             try {
-                val userKeysRef = database.getReference(USERS_NODE).child(userId).child(PUBLIC_KEYS_PATH)
-                val existingKeyResult = getUserPublicKeys(userId)
-                var keysSuccessfullyValidated: UserPublicKeys? = null
-                existingKeyResult.fold(
-                    onSuccess = { keys ->
-                        if (keys != null) {
-                            try {
-                                cryptoManager.getLocalUserHybridPublicKey()
-                                cryptoManager.getLocalUserSignaturePublicKey()
-                                keysSuccessfullyValidated = keys
-                            } catch (e: Exception) {
-                                Log.w(
-                                    "UserRepository",
-                                    "Local keys issue despite Firestore record for $userId. Regenerating.",
-                                    e
-                                )
-                            }
-                        }
-                    }, onFailure = {
-                        Log.w(
-                            "UserRepository",
-                            "Failed to fetch existing keys for $userId, attempting generation.",
-                            it
-                        )
-                    }
-                )
-
-                if (keysSuccessfullyValidated != null) {
-                    Log.i("UserRepository", "Existing keys for user: $userId validated and are usable.")
-                    return@withContext Result.success(keysSuccessfullyValidated)
-                }
-
-                Log.i("UserRepository", "Generating new E2EE keys for user: $userId")
-
-                val serializedHybridPublicKey =
-                    cryptoManager.getLocalUserHybridPublicKey()
-
-                val serializedSignatureVerificationKey =
-                    cryptoManager.getLocalUserSignaturePublicKey()
-
-                val publicKeysToStore = UserPublicKeys(
-                    hybridPublicKey = serializedHybridPublicKey,
-                    signatureVerificationKey = serializedSignatureVerificationKey
-                )
-
-                userKeysRef.setValue(publicKeysToStore).await()
-                Log.i("UserRepository", "Successfully stored new public keys for $userId in Realtime Database.")
-
-                Result.success(publicKeysToStore)
-
-            } catch (e: GeneralSecurityException) {
-                Log.e("UserRepository", "Security exception during key setup for $userId", e)
-                Result.failure(Exception("Failed to set up security keys: Cryptographic error.", e))
-            } catch (e: IOException) {
-                Log.e("UserRepository", "IO exception during key setup for $userId", e)
-                Result.failure(
-                    Exception(
-                        "Failed to set up security keys: Network or storage error.",
-                        e
-                    )
+                currentLocalHybridPublicKey = cryptoManager.getLocalUserHybridPublicKey()
+                currentLocalSignaturePublicKey = cryptoManager.getLocalUserSignaturePublicKey()
+                Log.d(
+                    "UserRepository",
+                    "Current local hybrid PK for $userId (first 30): ${
+                        currentLocalHybridPublicKey.take(30)
+                    }"
                 )
             } catch (e: Exception) {
-                Log.e("UserRepository", "Unexpected error during key setup for $userId", e)
-                Result.failure(
+                Log.e(
+                    "UserRepository",
+                    "Failed to get/generate local keys for $userId via CryptoManager",
+                    e
+                )
+                return@withContext Result.failure(
                     Exception(
-                        "An unexpected error occurred while setting up security keys.",
+                        "Couldn't initialize local cryptographic keys.",
                         e
                     )
                 )
             }
+
+            val userKeysRef =
+                database.getReference(USERS_NODE).child(userId).child(PUBLIC_KEYS_PATH)
+            val snapshot = userKeysRef.get().await()
+            val firebasePublicKeys: UserPublicKeys? = if (snapshot.exists()) {
+                try {
+                    snapshot.getValue<UserPublicKeys>()
+                } catch (e: Exception) {
+                    Log.w(
+                        "UserRepository",
+                        "Error deserializing public keys for $userId from Realtime Database. Treating as no keys exist.",
+                        e
+                    )
+                    null
+                }
+            } else {
+                null
+            }
+
+            if (firebasePublicKeys != null && firebasePublicKeys.hybridPublicKey == currentLocalHybridPublicKey &&
+                firebasePublicKeys.signatureVerificationKey == currentLocalSignaturePublicKey
+            ) {
+                Log.i(
+                    "UserRepository",
+                    "Local keys for $userId match Firebase records. Keys are usable. "
+                )
+                return@withContext Result.success(firebasePublicKeys)
+            } else {
+                if (firebasePublicKeys == null) {
+                    Log.i(
+                        "UserRepository",
+                        "No public keys node found for $userId in Realtime Database. "
+                    )
+
+                } else {
+                    Log.w(
+                        "UserRepository",
+                        "Firebase keys for $userId are STALE or mismatched. Updating with current local keys."
+                    )
+                }
+
+                val newPublicKeysToStore = UserPublicKeys(
+                    hybridPublicKey = currentLocalHybridPublicKey,
+                    signatureVerificationKey = currentLocalSignaturePublicKey
+                )
+
+                userKeysRef.setValue(newPublicKeysToStore).await()
+                Log.i(
+                    "UserRepository",
+                    "Successfully updated public keys for $userId in Realtime Database."
+                )
+                return@withContext Result.success(newPublicKeysToStore)
+
+            }
+        } catch (e: DatabaseException) {
+            Log.e("UserRepository", "Firebase Database exception during key setup for $userId", e)
+            return@withContext Result.failure(
+                Exception(
+                    "A Firebase error occurred during security key setup.",
+                    e
+                )
+            )
+        } catch (e: GeneralSecurityException) {
+            Log.e("UserRepository", "GeneralSecurityException during key setup for $userId", e)
+            return@withContext Result.failure(
+                Exception(
+                    "A cryptographic security error occurred during key setup.",
+                    e
+                )
+            )
+        } catch (e: IOException) {
+            Log.e(
+                "UserRepository",
+                "IOException during key setup for $userId (possibly network related for Firebase ops)",
+                e
+            )
+            return@withContext Result.failure(
+                Exception(
+                    "A network or storage error occurred during security key setup.",
+                    e
+                )
+            )
+        } catch (e: Exception) {
+            Log.e(
+                "UserRepository",
+                "Unexpected Exception during key setup for $userId. Type: ${e.javaClass.simpleName}",
+                e
+            )
+            return@withContext Result.failure(
+                Exception(
+                    "An unexpected error occurred during security key setup: ${e.message}",
+                    e
+                )
+            )
         }
+    }
 
     override suspend fun getUserPublicKeys(userId: String): Result<UserPublicKeys?> = withContext(Dispatchers.IO){
         try {

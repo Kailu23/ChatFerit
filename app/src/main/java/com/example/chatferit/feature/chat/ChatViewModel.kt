@@ -222,7 +222,7 @@ class ChatViewModel @Inject constructor(
                     }
                 }
                 val processedMessages = newMessagesFromDb.mapNotNull { firebaseMessage ->
-                    var finalDisplayContent: String?
+                    var finalDisplayContent: String? = null
                     var successfullyProcessed = true
 
                     if (firebaseMessage.messageEncrypted) {

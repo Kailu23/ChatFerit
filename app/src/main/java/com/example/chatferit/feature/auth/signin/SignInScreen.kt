@@ -82,7 +82,7 @@ fun SignInScreen(navController: NavController) {
                 (keySetupState as KeySetupState.Error).message,
                 Toast.LENGTH_LONG
             ).show()
-            navController.navigate("retry")
+//            navController.navigate("retry") // TODO(): Retry button
         }
     }
     Scaffold(modifier = Modifier.fillMaxSize()) { paddingValues ->

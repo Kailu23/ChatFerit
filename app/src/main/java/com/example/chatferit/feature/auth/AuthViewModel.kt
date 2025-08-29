@@ -3,6 +3,7 @@ package com.example.chatferit.feature.auth
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.chatferit.data.repository.IAuthRepository
 import com.example.chatferit.data.repository.UserRepository
 import com.example.chatferit.model.UserProfile
 import com.google.firebase.auth.FirebaseAuth
@@ -11,8 +12,10 @@ import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.database.FirebaseDatabase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
@@ -22,10 +25,15 @@ import javax.inject.Inject
 class AuthViewModel @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
     private val userRepository: UserRepository,
-    private val database: FirebaseDatabase
+    private val database: FirebaseDatabase,
+    private val authRepository: IAuthRepository
 ) : ViewModel(){
-    private val _currentUser = MutableStateFlow<FirebaseUser?>(firebaseAuth.currentUser)
-    val currentUser : StateFlow<FirebaseUser?> = _currentUser.asStateFlow()
+    private val _currentUser: StateFlow<FirebaseUser?> = authRepository.getAuthStateFlow().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = authRepository.getCurrentUser()
+    )
+    val currentUser : StateFlow<FirebaseUser?> = _currentUser
 
     private val _keySetupState = MutableStateFlow<KeySetupState>(KeySetupState.Idle)
     val keySetupState : StateFlow<KeySetupState> = _keySetupState.asStateFlow()
@@ -33,23 +41,21 @@ class AuthViewModel @Inject constructor(
     private val _authScreenState = MutableStateFlow<AuthScreenState>(AuthScreenState.Idle)
     val authScreenState : StateFlow<AuthScreenState> = _authScreenState.asStateFlow()
 
-    private val authStateListener = FirebaseAuth.AuthStateListener {auth ->
-        val user = auth.currentUser
-        _currentUser.value = user
-        if (user != null) {
-            if (_keySetupState.value is KeySetupState.Idle || _keySetupState.value is KeySetupState.Error) {
-                Log.d("AuthViewModel", "User is logged in (${user.uid}), initiating key setup.")
-                performKeySetupIfNeeded(user.uid)
-            }
-        } else {
-            Log.d("AuthViewModel", "User logged out. Resetting states")
-            _keySetupState.value = KeySetupState.Idle
-            _authScreenState.value = AuthScreenState.Idle
-        }
-    }
-
     init {
-        firebaseAuth.addAuthStateListener(authStateListener)
+        viewModelScope.launch {
+            currentUser.collect{user ->
+                if (user != null) {
+                    Log.d(
+                        "AuthViewModel",
+                        "User (${user.uid}) logged in. Calling performKeySetupIfNeeded."
+                    )
+                    performKeySetupIfNeeded(user.uid)
+                } else {
+                    Log.d("AuthViewModel", "User logged out. Resetting _keySetupState to Idle.")
+                    _keySetupState.value = KeySetupState.Idle
+                }
+            }
+        }
     }
 
     fun performKeySetupIfNeeded(userId: String) {
@@ -167,11 +173,5 @@ class AuthViewModel @Inject constructor(
             _keySetupState.value = KeySetupState.Idle
             performKeySetupIfNeeded(userId)
         } ?: Log.w("AuthViewModel", "User ID is null, not retrying key setup.")
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        firebaseAuth.removeAuthStateListener(authStateListener)
-        Log.d("AuthViewModel", "AuthViewModel cleared, AuthStateListener removed.")
     }
 }

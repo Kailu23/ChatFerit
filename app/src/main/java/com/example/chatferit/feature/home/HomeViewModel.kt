@@ -88,7 +88,7 @@ class HomeViewModel @Inject constructor(
             _channels.value = emptyList()
             return
         }
-        val ref = firebaseDatabase.getReference("channel")
+        val ref = firebaseDatabase.getReference("channels")
         ref.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val channelList = mutableListOf<Channel>()

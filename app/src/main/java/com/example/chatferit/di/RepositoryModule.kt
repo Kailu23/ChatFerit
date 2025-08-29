@@ -1,6 +1,8 @@
 package com.example.chatferit.di
 
+import com.example.chatferit.data.repository.AuthRepository
 import com.example.chatferit.data.repository.FriendRepository
+import com.example.chatferit.data.repository.IAuthRepository
 import com.example.chatferit.data.repository.UserRepository
 import com.example.chatferit.data.repository.iFriendRepository
 import com.example.chatferit.data.repository.iUserRepository
@@ -32,6 +34,13 @@ abstract class RepositoryModule {
         ) : iFriendRepository {
             return FriendRepository(firebaseAuth, firebaseDatabase)
         }
+
+        @Provides
+        @Singleton
+        fun provideAuthRepository(firebaseAuth: FirebaseAuth): IAuthRepository {
+            return AuthRepository(firebaseAuth)
+        }
     }
+
 }
 

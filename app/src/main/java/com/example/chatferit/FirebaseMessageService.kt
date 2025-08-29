@@ -1,45 +1,118 @@
 package com.example.chatferit
 
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.content.Context
-import android.os.Build
 import android.util.Log
-import androidx.core.app.NotificationCompat
-import com.google.firebase.Firebase
-import com.google.firebase.auth.auth
+import com.example.chatferit.notifications.NotificationConstants
+import com.example.chatferit.notifications.NotificationHelper
+import com.example.chatferit.util.CryptoManager
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
-import java.util.Random
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import java.io.IOException
+import java.security.GeneralSecurityException
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class FirebaseMessageService : FirebaseMessagingService() {
 
-    override fun onMessageReceived(message: RemoteMessage) {
-        Log.d("FirebaseMessageService", "From: ${message.from} Data: ${message.notification}")
-        message.notification?.let {
-            ShowNotification(it.title, it.body)
+    @Inject
+    lateinit var notificationHelper: NotificationHelper
+
+    @Inject
+    lateinit var cryptoManager: CryptoManager
+
+    private val  serviceJob = SupervisorJob()
+    private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
+
+    override fun onMessageReceived(remoteMessage: RemoteMessage) {
+        Log.d("FirebaseMessageService", "From: ${remoteMessage.from}")
+
+        if (remoteMessage.data.isNotEmpty()) {
+            Log.d("FirebaseMessageService", "Message data payload: " + remoteMessage.data)
+
+            val data = remoteMessage.data
+            val senderName = data["senderName"] ?: "New Message"
+            val encryptedPayload = data["encryptedMessageForRecipient"]
+            val channelIdFCM = data["channelId"]
+            val originalMessageId = data["messageId"]
+
+            val currentUserName = FirebaseAuth.getInstance().currentUser?.displayName
+            if (currentUserName != null && senderName.contains(currentUserName)) {
+                Log.d("FirebaseMessageService", "Notification suppressed: message from current user ($currentUserName).")
+                return
+            }
+
+
+            if (encryptedPayload != null && channelIdFCM != null) {
+                serviceScope.launch {
+                    try {
+                        val decryptedText = cryptoManager.decryptHybrid(encryptedPayload)
+                        Log.i("FirebaseMessageService", "Decrypted message: $decryptedText")
+
+                        notificationHelper.showSimpleNotification(
+                            notificationId = NotificationConstants.NOTIFICATION_ID_NEW_MESSAGE + (channelIdFCM.hashCode()),
+                            channelId = NotificationConstants.CHANNEL_ID_HIGH_IMPORTANCE,
+                            title = senderName,
+                            message = decryptedText,
+                            extras = mapOf(
+                                "channelId" to channelIdFCM,
+                                "channelName" to (data["channelName"] ?: senderName),
+                                "receiverId" to (data["senderId"] ?: "")
+                            )
+                        )
+
+                    } catch (e: GeneralSecurityException) {
+                        Log.e("FirebaseMessageService", "Decryption failed (Security Error): ${e.message}", e)
+                        notificationHelper.showSimpleNotification(
+                            notificationId = NotificationConstants.NOTIFICATION_ID_NEW_MESSAGE + (channelIdFCM.hashCode()),
+                            channelId = NotificationConstants.CHANNEL_ID_GENERAL,
+                            title = senderName,
+                            message = "[Encrypted message - could not decrypt]",
+                            extras = mapOf("channelId" to channelIdFCM) // Still allow navigation
+                        )
+                    } catch (e: IOException) {
+                        Log.e("FirebaseMessageService", "Decryption failed (IO Error): ${e.message}", e)
+                    } catch (e: Exception) {
+                        Log.e("FirebaseMessageService", "Generic error processing/decrypting FCM message: ${e.message}", e)
+                    }
+                }
+            } else {
+                Log.w("FirebaseMessageService", "Encrypted payload or channelId missing in FCM data.")
+                remoteMessage.notification?.let {
+                    Log.d("FirebaseMessageService", "Fallback to notification payload: Title: ${it.title}, Body: ${it.body}")
+                    notificationHelper.showSimpleNotification(
+                        notificationId = NotificationConstants.NOTIFICATION_ID_NEW_MESSAGE, // A different ID for generic
+                        channelId = NotificationConstants.CHANNEL_ID_GENERAL,
+                        title = it.title ?: "New Message",
+                        message = it.body ?: "You have a new message."
+                    )
+                }
+            }
+        } else if (remoteMessage.notification != null) {
+            // Only notification payload, no data payload. Handle as a simple notification.
+            remoteMessage.notification?.let {
+                Log.d("FirebaseMessageService", "Received message with only notification payload: Title: ${it.title}, Body: ${it.body}")
+                notificationHelper.showSimpleNotification(
+                    notificationId = NotificationConstants.NOTIFICATION_ID_NEW_MESSAGE,
+                    channelId = NotificationConstants.CHANNEL_ID_GENERAL,
+                    title = it.title ?: "New Message",
+                    message = it.body ?: "You have a new message."
+                )
+            }
         }
     }
 
-    fun ShowNotification(title: String?, message: String?) {
-        Firebase.auth.currentUser?.let {
-            if(title?.contains(it.displayName.toString()) == true || message?.contains(it.displayName.toString()) == true) return
-        }
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    override fun onNewToken(token: String) {
+        Log.d("FirebaseMessageService", "Refreshed token: $token")
+    }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel =   NotificationChannel("messages", "Messages", NotificationManager.IMPORTANCE_HIGH)
-            notificationManager.createNotificationChannel(channel)
-        } else {
-
-        }
-        val notificationId = Random().nextInt(1000)
-        val notification = NotificationCompat.Builder(this, "messages")
-            .setContentTitle(title)
-            .setContentText(message)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .build()
-        notificationManager.notify(notificationId, notification)
+    override fun onDestroy() {
+        super.onDestroy()
+        serviceJob.cancel()
     }
 }

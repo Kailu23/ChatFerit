@@ -1,5 +1,6 @@
 package com.example.chatferit.feature.home
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,16 +38,14 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel = hilt
 
     val navigateToLogin by viewModel.navigateToLogin.collectAsState()
 
+    // In SettingsScreen.kt ([3])
     LaunchedEffect(navigateToLogin) {
         if (navigateToLogin) {
-            navController.navigate("signin") {
-                popUpTo(navController.graph.startDestinationId ) { inclusive = true }
-                launchSingleTop = true
-            }
+            Log.d("SettingsScreenNav", "navigateToLogin is true. MainApp's NavHost should handle redirecting to signin.")
+            // NO navController.navigate CALLS HERE
             viewModel.onLoginNavigationComplete()
         }
     }
-
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -84,7 +83,9 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel = hilt
             }
 
             Button(
-                onClick = { viewModel.logoutUser() },
+                onClick = {
+                    viewModel.logoutUser()
+                    },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),

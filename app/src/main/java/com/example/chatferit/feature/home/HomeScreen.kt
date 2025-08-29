@@ -17,13 +17,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -114,19 +111,6 @@ fun HomeScreen(navController: NavController) {
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             when (selectedScreenRoute) {
-                BottomNavItem.Chats.route -> {
-                    FloatingActionButton(
-                        onClick = { viewModel.logoutUser() },
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer, // Or your preferred color
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                            contentDescription = "Logout"
-                        )
-                    }
-                }
-
                 BottomNavItem.Groups.route -> {
                     Box(
                         modifier = Modifier

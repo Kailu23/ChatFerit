@@ -540,7 +540,7 @@ class HomeViewModel @Inject constructor(
         _allUsers.value = emptyList()
         _searchQuery.value = ""
         clearAddFriendSearch()
-        _snackbarMessage.value = "Logged out successfully." // Optional feedback
+        _snackbarMessage.value = "Logged out successfully."
 
         // Signal navigation
         _navigateToLogin.value = true

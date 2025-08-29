@@ -8,10 +8,7 @@ import com.example.chatferit.model.UserProfile
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.UserProfileChangeRequest
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ValueEventListener
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -142,33 +139,21 @@ class AuthViewModel @Inject constructor(
         val userEmail = firebaseUser.email ?: ""
         val userProfileRef = database.getReference("users").child(userId)
 
-        userProfileRef.addListenerForSingleValueEvent(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                if (!snapshot.exists()) {
-                    val newUserProfile = UserProfile(
-                        uid = userId,
-                        displayName = fullName,
-                        email = userEmail,
-                        createdAt = System.currentTimeMillis()
-                    )
-                    userProfileRef.setValue(newUserProfile)
-                        .addOnSuccessListener {
-                            Log.i("AuthViewModel", "User profile created in RTDB for $userId")
-                            performKeySetupIfNeeded(userId)
-                        }
-                        .addOnFailureListener { e ->
-                            Log.e("AuthViewModel", "Failed to create user profile in RTDB for $userId", e)
-                            _authScreenState.value = AuthScreenState.AuthError("Failed to save profile.")
-                        }
-                } else {
-                    Log.d("AuthViewModel", "User profile already exists in RTDB for $userId.")
-                }
+        val newUserProfile = UserProfile(
+            uid = userId,
+            displayName = fullName,
+            email = userEmail,
+            createdAt = System.currentTimeMillis()
+        )
+        userProfileRef.setValue(newUserProfile)
+            .addOnSuccessListener {
+                Log.i("AuthViewModel", "User profile created in RTDB for $userId")
+                performKeySetupIfNeeded(userId)
             }
-
-            override fun onCancelled(error: DatabaseError) {
-                Log.e("AuthViewModel", "Error checking user profile in RTDB for $userId", error.toException())
+            .addOnFailureListener { e ->
+                Log.e("AuthViewModel", "Failed to create user profile in RTDB for $userId", e)
+                _authScreenState.value = AuthScreenState.AuthError("Failed to save profile.")
             }
-        })
     }
 
     fun signOut() {

@@ -17,6 +17,8 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -61,12 +63,24 @@ class HomeViewModel @Inject constructor(
     val incomingFriendRequests: StateFlow<List<FriendRequest>> = _incomingFriendRequests.asStateFlow()
 
     private val _sentFriendRequests = MutableStateFlow<List<FriendRequest>>(emptyList())
-    val sentFriendRequests: StateFlow<List<FriendRequest>> = _incomingFriendRequests.asStateFlow()
+    val sentFriendRequests: StateFlow<List<FriendRequest>> = _sentFriendRequests.asStateFlow()
 
     private val _showAddFriendDialog = MutableStateFlow(false)
     val showAddFriendDialog = _showAddFriendDialog.asStateFlow()
+    private val _addFriendSearchQuery = MutableStateFlow("")
+    val addFriendSearchQuery: StateFlow<String> = _addFriendSearchQuery.asStateFlow()
+    private val _addFriendSearchResults = MutableStateFlow<List<UserProfile>>(emptyList())
+    val addFriendSearchResults: StateFlow<List<UserProfile>> = _addFriendSearchResults.asStateFlow()
+    private val _isSearchingUsers = MutableStateFlow(false)
+    val isSearchingUsers: StateFlow<Boolean> = _isSearchingUsers.asStateFlow()
 
+    private var searchJob: Job? = null
     private val currentUserId: String? = firebaseAuth.currentUser?.uid
+
+    private val usersRef = firebaseDatabase.getReference("users")
+
+    private val _snackbarMessage = MutableStateFlow<String?>(null)
+    val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
 
     val actualFriends: StateFlow<List<UserProfile>> = combine(
         _allUsers,
@@ -169,7 +183,7 @@ class HomeViewModel @Inject constructor(
 
     private fun listenForAllUsers() {
         val currentAuthUid = firebaseAuth.currentUser?.uid ?: return
-        firebaseDatabase.getReference("users").addValueEventListener(object : ValueEventListener{
+        usersRef.addValueEventListener(object : ValueEventListener{
             override fun onDataChange(snapshot: DataSnapshot) {
                 val userList = mutableListOf<UserProfile>()
                 snapshot.children.forEach{userSnapshot ->
@@ -192,6 +206,7 @@ class HomeViewModel @Inject constructor(
         val currentUserDisplayName = firebaseAuth?.currentUser?.displayName ?: "Unknown"
         if (name.isBlank()) {
             Log.w("Add Channel", "Channel name cannot be blank.")
+            _snackbarMessage.value = "Channel name cannot be empty."
             return
         }
 
@@ -215,10 +230,12 @@ class HomeViewModel @Inject constructor(
         channelRef.setValue(newChannel)
             .addOnSuccessListener {
                 Log.d("Add Channel", "Group channel '$name' added successfully.")
+                _snackbarMessage.value = "Group '$name' created successfully!"
                 onDismissAddChannelDialog()
             }
             .addOnFailureListener { e ->
                 Log.e("Add Channel", "Failed to add group channel '$name'", e)
+                _snackbarMessage.value = "Failed to create group: ${e.message}"
             }
     }
 
@@ -283,7 +300,7 @@ class HomeViewModel @Inject constructor(
 
     private suspend fun getDisplayNameForUser(userId: String): String {
         return try {
-            val userSnapshot = firebaseDatabase.getReference("users")
+            val userSnapshot = usersRef
                 .child(userId)
                 .child("displayName")
                 .get()
@@ -315,12 +332,13 @@ class HomeViewModel @Inject constructor(
         _searchQuery.value = query
     }
 
-    fun onAddFriendClicked() { // Renamed from onAddFriendClicked to be specific
+    fun onAddFriendClicked() {
         _showAddFriendDialog.value = true
     }
 
-    fun onDismissAddFriendDialog() { // Renamed from onAddFriendDialogDismiss
+    fun onDismissAddFriendDialog() {
         _showAddFriendDialog.value = false
+        clearAddFriendSearch()
     }
 
     fun listenForIncomingFriendRequests() {
@@ -342,9 +360,14 @@ class HomeViewModel @Inject constructor(
 
     fun submitSendFriendRequest(targetUserIdentifier: String) {
         viewModelScope.launch {
-            val currentFirebaseUserId = firebaseAuth.currentUser?.uid ?: return@launch
+            val currentFirebaseUserId = firebaseAuth.currentUser?.uid
+            if (currentFirebaseUserId == null) {
+                _snackbarMessage.value = "Error: Could not identify current user."
+                return@launch
+            }
             if (targetUserIdentifier.isBlank()) {
                 Log.w("HomeViewModel", "Target user identifier is blank.")
+                _snackbarMessage.value = "Please enter an email or name to search"
                 return@launch
             }
 
@@ -352,6 +375,7 @@ class HomeViewModel @Inject constructor(
 
             if (targetUid == currentFirebaseUserId) {
                 Log.w("HomeViewModel", "Cannot send a friend request to yourself.")
+                _snackbarMessage.value = "You cannot send a friend request to yourself."
                 return@launch
             }
 
@@ -360,11 +384,27 @@ class HomeViewModel @Inject constructor(
             when(result){
                 is Resource.Success -> {
                     Log.d("HomeViewModel", "Friend request sent successfully to $targetUid")
+                    _snackbarMessage.value = "Friend request sent!"
                     _showAddFriendDialog.value = false
                 }
-                is Resource.Error -> Log.e("HomeViewModel", "Error sending friend request: ${result.message}")
-                is Resource.Loading -> TODO()
+                is Resource.Error -> {
+                    _snackbarMessage.value = "Error sending friend request."
+                    Log.e("HomeViewModel", "Error sending friend request: ${result.message}")
+                }
+                is Resource.Loading -> TODO("Not yet implemented")
             }
+
+            if (actualFriends.value.any { friend -> friend.uid == targetUid }) {
+                _snackbarMessage.value = "You are already friends with this user"
+            }
+            if (incomingFriendRequests.value.any { request -> request.senderId == targetUid }) {
+                _snackbarMessage.value = "This user has already sent you a request."
+                return@launch
+            }
+            /*if (_sentFriendRequests.value.any { friend -> friend. == targetUid }) {
+                _snackbarMessage.value = "You've already sent a request to this user."
+                return@launch
+            }*/ // TODO(Change friend request model to include senderId)
         }
     }
 
@@ -375,7 +415,7 @@ class HomeViewModel @Inject constructor(
             when (result) {
                 is Resource.Success -> {
                     Log.d("HomeViewModel", "Friend request from ${request.senderName} accepted.")
-
+                    _snackbarMessage.value = "${request.senderName} is now your friend!"
                     getOrCreatePrivateChannel(request.senderId).fold(
                         onSuccess = { (channelId, channelName) ->
                             Log.d(
@@ -394,6 +434,7 @@ class HomeViewModel @Inject constructor(
                 }
                 is Resource.Error -> {
                     Log.e("HomeViewModel", "Failed to accept friend request: ${result.message}")
+                    _snackbarMessage.value = "Failed to accept request."
                 }
                 is Resource.Loading -> {
                     TODO()
@@ -409,10 +450,12 @@ class HomeViewModel @Inject constructor(
             when (result) {
                 is Resource.Success -> {
                     Log.d("HomeViewModel", "Friend request from ${request.senderName} declined.")
+                    _snackbarMessage.value = "Request from ${request.senderName} declined."
                 }
 
                 is Resource.Error -> {
                     Log.e("HomeViewModel", "Failed to decline friend request: ${result.message}")
+                    _snackbarMessage.value = "Failed to decline request.}"
                 }
                 is Resource.Loading -> {
                     TODO()
@@ -420,4 +463,69 @@ class HomeViewModel @Inject constructor(
             }
         }
     }
+
+    fun onAddFriendSearchQueryChanged(query: String) {
+        _addFriendSearchQuery.value = query
+        searchJob?.cancel()
+
+        if (query.length > 3) {
+            searchJob = viewModelScope.launch {
+                delay(300)
+                _isSearchingUsers.value = true
+                _addFriendSearchResults.value = emptyList()
+
+                try {
+                    _addFriendSearchResults.value = searchUsers(query)
+                } catch (e: Exception) {
+                    Log.e("HomeViewModel", "Error searching users", e)
+                    _addFriendSearchResults.value = emptyList()
+                } finally {
+                    _isSearchingUsers.value = false
+                }
+            }
+        } else {
+            _addFriendSearchResults.value = emptyList()
+        }
+    }
+
+    suspend fun searchUsers(query: String): List<UserProfile> {
+        if(query.isBlank() || query.length < 3) return emptyList()
+
+        val normalizedQuery = query.lowercase().trim()
+        val foundUsers = mutableSetOf<UserProfile>()
+
+        try {
+            val allUsersSnapshot = usersRef
+                .get().await()
+
+            allUsersSnapshot.children.forEach { dataSnapshot ->
+                dataSnapshot.getValue(UserProfile::class.java)?.let { user ->
+                    val userEmailLower = user.email.lowercase()
+                    val userNameLower = user.displayName.lowercase()
+
+                    if (userEmailLower.contains(normalizedQuery) || userNameLower.contains(normalizedQuery)) {
+                        foundUsers.add(user.copy(uid = dataSnapshot.key ?: ""))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("HomeViewModel", "Firebase user search failed", e)
+            return emptyList()
+        }
+
+        val currentUserId = firebaseAuth.currentUser?.uid
+        return foundUsers.filterNot { it.uid == currentUserId}.toList().sortedBy { it.displayName }
+    }
+
+    fun clearAddFriendSearch() {
+        _addFriendSearchQuery.value = ""
+        _addFriendSearchResults.value = emptyList()
+        _isSearchingUsers.value = false
+    }
+
+    fun clearSnackbarMessage() {
+        _snackbarMessage.value = null
+    }
+
+
 }

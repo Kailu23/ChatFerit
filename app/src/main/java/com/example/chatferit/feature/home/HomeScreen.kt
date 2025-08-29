@@ -25,12 +25,17 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -73,11 +78,26 @@ fun HomeScreen(navController: NavController) {
     val incomingRequests by viewModel.incomingFriendRequests.collectAsState()
     val currentSearchQuery by viewModel.searchQuery.collectAsState()
     val showAddFriendDialog by viewModel.showAddFriendDialog.collectAsState()
+    val addFriendSearchQuery by viewModel.addFriendSearchQuery.collectAsState()
+    val addFriendSearchResults by viewModel.addFriendSearchResults.collectAsState()
+    val isSearchingUsers by viewModel.isSearchingUsers.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarMessage by viewModel.snackbarMessage.collectAsState()
 
     val showAddGroupChannelDialog by viewModel.showAddChannelDialog.collectAsState()
     val addGroupChannelSheetState = rememberModalBottomSheetState()
 
     val context = LocalContext.current
+
+
+
+    LaunchedEffect(snackbarMessage) {
+        snackbarMessage?.let { message ->
+            Log.d("HomeScreen", "Showing snackbar: $message")
+            snackbarHostState.showSnackbar(message = message, duration = SnackbarDuration.Short)
+            viewModel.clearSnackbarMessage()
+        }
+    }
 
     if (showAddGroupChannelDialog) {
         ModalBottomSheet(
@@ -91,6 +111,7 @@ fun HomeScreen(navController: NavController) {
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             if (selectedScreenRoute == BottomNavItem.Groups.route) {
                 Box(
@@ -176,24 +197,47 @@ fun HomeScreen(navController: NavController) {
                     UsersTabContent(
                         friendsList = actualFriendsList,
                         friendRequestsList = incomingRequests,
+
                         searchQuery = currentSearchQuery,
+                        onSearchQueryChanged = { query -> viewModel.onSearchQueryChanged(query) },
+
                         showAddFriendDialog = showAddFriendDialog,
-                        onSearchQueryChanged = {query -> viewModel.onSearchQueryChanged(query)},
-                        onFriendClicked = {userProfile ->
+                        onAddFriendClicked = { viewModel.onAddFriendClicked() },
+                        onDismissAddFriendDialog = {
+                            viewModel.onDismissAddFriendDialog()
+                            viewModel.clearAddFriendSearch()
+                        },
+
+                        addFriendSearchQuery = addFriendSearchQuery,
+                        addFriendSearchResults = addFriendSearchResults,
+                        isSearchingUsers = isSearchingUsers,
+                        onAddFriendSearchQueryChanged = { newDialogQuery ->
+                            viewModel.onAddFriendSearchQueryChanged(newDialogQuery)
+                        },
+                        onClearAddFriendSearch = { viewModel.clearAddFriendSearch() },
+                        onFriendClicked = { userProfile ->
                             coroutineScope.launch {
                                 viewModel.getOrCreatePrivateChannel(userProfile.uid).fold(
-                                    onSuccess = {(channelId, channelName) ->
+                                    onSuccess = { (channelId, channelName) ->
                                         navController.navigate("chat/$channelId/$channelName/${userProfile.uid}")
                                     },
-                                    onFailure = {error -> Log.e("HomeScreen", "Failed to get/create DM", error) }
+                                    onFailure = { error ->
+                                        Log.e(
+                                            "HomeScreen",
+                                            "Failed to get/create DM",
+                                            error
+                                        )
+                                    }
                                 )
                             }
                         },
-                        onAddFriendClicked = {viewModel.onAddFriendClicked()},
-                        onDismissAddFriendDialog = {viewModel.onDismissAddFriendDialog()},
-                        onSubmitSendFriendRequest = {targetUser -> viewModel.submitSendFriendRequest(targetUser) },
-                        onAcceptRequest = {request -> viewModel.acceptFriendRequest(request)},
-                        onDeclineRequest = {request -> viewModel.declineFriendRequest(request)},
+                        onSubmitSendFriendRequestWithUid = { selectedUserId ->
+                            viewModel.submitSendFriendRequest(
+                                selectedUserId
+                            )
+                        },
+                        onAcceptRequest = { request -> viewModel.acceptFriendRequest(request) },
+                        onDeclineRequest = { request -> viewModel.declineFriendRequest(request) },
                     )
                 }
 
@@ -203,29 +247,26 @@ fun HomeScreen(navController: NavController) {
 }
 @Composable
 fun SearchBar(searchQuery: String, onSearchQueryChanged: (String) -> Unit) {
-    TextField(
-        value = searchQuery, onValueChange = {onSearchQueryChanged(it)},
+    OutlinedTextField(
+        value = searchQuery,
+        onValueChange = { onSearchQueryChanged(it) },
+
         placeholder = { Text(text = "Search") },
+        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = "Search") },
+        singleLine = true,
+        shape = RoundedCornerShape(32.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = Color.White,
+            unfocusedTextColor = Color.White,
+            focusedBorderColor = Color.Gray,
+            unfocusedBorderColor = DarkGray,
+            focusedContainerColor = DarkGray.copy(alpha = 0.3f),
+            unfocusedContainerColor = DarkGray.copy(0.3f),
+            focusedPlaceholderColor = Color.Gray, unfocusedPlaceholderColor = DarkGray
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(40.dp)),
-
-        textStyle = TextStyle(color = Color.Gray),
-        colors = TextFieldDefaults.colors().copy(
-            focusedContainerColor = DarkGray,
-            unfocusedContainerColor = DarkGray,
-            focusedTextColor = Color.Gray,
-            unfocusedTextColor = Color.Gray,
-            focusedPlaceholderColor = Color.Gray,
-            unfocusedPlaceholderColor = Color.Gray,
-            focusedIndicatorColor = Color.Gray
-        ),
-        leadingIcon = {
-            Icon(
-                imageVector = Icons.Filled.Search,
-                contentDescription = null
-            ) }
     )
 }
 

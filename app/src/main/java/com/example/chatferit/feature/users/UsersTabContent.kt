@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -22,9 +23,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -36,10 +37,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,6 +47,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
+import com.example.chatferit.feature.home.SearchBar
 import com.example.chatferit.model.FriendRequest
 import com.example.chatferit.model.UserProfile
 import com.example.chatferit.ui.theme.DarkGray
@@ -64,9 +62,14 @@ fun UsersTabContent(
     onFriendClicked: (UserProfile) -> Unit,
     onAddFriendClicked: () -> Unit,
     onDismissAddFriendDialog: () -> Unit,
-    onSubmitSendFriendRequest: (String) -> Unit,
+    onSubmitSendFriendRequestWithUid: (String) -> Unit,
     onAcceptRequest: (FriendRequest) -> Unit,
-    onDeclineRequest: (FriendRequest) -> Unit
+    onDeclineRequest: (FriendRequest) -> Unit,
+    addFriendSearchQuery: String,
+    addFriendSearchResults: List<UserProfile>,
+    isSearchingUsers: Boolean,
+    onAddFriendSearchQueryChanged: (String) -> Unit,
+    onClearAddFriendSearch: () -> Unit
 ) {
 
     Scaffold (
@@ -103,26 +106,7 @@ fun UsersTabContent(
             }
             // Friends section
             SectionTitle("Your friends (${friendsList.size})")
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { onSearchQueryChanged(it) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text(text = "Search") },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = "Search") },
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedBorderColor = Color.Gray,
-                    unfocusedBorderColor = DarkGray,
-                    focusedContainerColor = DarkGray.copy(alpha = 0.3f),
-                    unfocusedContainerColor = DarkGray.copy(0.3f),
-                    focusedPlaceholderColor = Color.Gray, unfocusedPlaceholderColor = DarkGray
-                )
-            )
-//            SearchBar(searchQuery = searchQuery, onSearchQueryChanged = {onSearchQueryChanged})
+            SearchBar(searchQuery = searchQuery, onSearchQueryChanged = {onSearchQueryChanged(it)})
             if (friendsList.isEmpty() && searchQuery.isBlank() && friendRequestsList.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -186,9 +170,17 @@ fun UsersTabContent(
         }
     }
     if (showAddFriendDialog) {
-        AddFriendDialog(onDismiss = onDismissAddFriendDialog,
-            onConfirm = { inputText ->
-                onSubmitSendFriendRequest(inputText) }
+        AddFriendDialog(
+            searchQuery = addFriendSearchQuery,
+            searchResults = addFriendSearchResults,
+            isLoading = isSearchingUsers,
+            onSearchQueryChanged = onAddFriendSearchQueryChanged,
+            onDismiss = {
+                onDismissAddFriendDialog()
+            },
+            onSendRequestClicked = {userId ->
+                onSubmitSendFriendRequestWithUid(userId)
+            }
         )
     }
 }
@@ -288,37 +280,87 @@ fun FriendItem(userProfile: UserProfile, onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddFriendDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
-    var text by remember { mutableStateOf("") }
+fun AddFriendDialog(
+    searchQuery: String,
+    searchResults: List<UserProfile>,
+    isLoading: Boolean,
+    onSearchQueryChanged: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onSendRequestClicked: (userId: String) -> Unit
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(text = "Add New Friend", color = Color.White)
         },
         text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                label = { Text(text = "Enter friend's email or username", color = Color.Gray, fontSize = 12.sp)},
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Color.LightGray.copy(alpha = 0.3f), unfocusedContainerColor = DarkGray.copy(0.3f),
-                    disabledContainerColor = DarkGray.copy(0.3f),
-                    focusedBorderColor = Color.LightGray, unfocusedBorderColor = Color.LightGray,
-                    focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                    cursorColor = Color.White
+            Column{
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { onSearchQueryChanged(it) },
+                    label = {
+                        Text(
+                            text = "Enter friend's email or full name",
+                            color = Color.Gray,
+                            fontSize = 12.sp
+                        )
+                    },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color.LightGray.copy(alpha = 0.3f),
+                        unfocusedContainerColor = DarkGray.copy(0.3f),
+                        disabledContainerColor = DarkGray.copy(0.3f),
+                        focusedBorderColor = Color.LightGray,
+                        unfocusedBorderColor = Color.LightGray,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        cursorColor = Color.White
+                    ),
+                    modifier = Modifier.fillMaxWidth()
                 )
-            )
-        },
-        confirmButton = {
-            Button(onClick = { if (text.isNotBlank()) onConfirm(text) })
-            {
-                Text(text = "Send Request")
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally), )
+                } else if (searchResults.isNotEmpty()) {
+                    Text(
+                        "Results:",
+                        color = Color.LightGray,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                    LazyColumn (modifier = Modifier.heightIn(max = 150.dp)){
+                        items(searchResults, key = { it.uid}) { user ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column (modifier = Modifier.weight(1f)) {
+                                    Text(user.displayName, color = Color.White)
+                                    user.email?.let {
+                                        Text(it, color = Color.Gray, fontSize = 12.sp)
+                                    }
+                                }
+                                Button(onClick = {onSendRequestClicked(user.uid) }) {
+                                    Text(text = "Add")
+                                }
+                            }
+                            HorizontalDivider(color = DarkGray.copy(alpha = 0.3f))
+                        }
+                    }
+                } else if ( searchQuery.length > 3 && !isLoading) {
+                    Text("No users found", color = Color.Gray, fontSize = 14.sp)
+                }
             }
         },
+        confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(text = "Cancel", color = Color.LightGray)
+                Text(text = "Close", color = Color.LightGray)
             }
         },
         containerColor = DarkGray.copy(alpha = 0.9f)

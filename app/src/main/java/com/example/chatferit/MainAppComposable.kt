@@ -15,7 +15,7 @@ import com.example.chatferit.feature.auth.signin.SignInScreen
 import com.example.chatferit.feature.auth.signup.SignUpScreen
 import com.example.chatferit.feature.chat.ChatScreen
 import com.example.chatferit.feature.home.HomeScreen
-import com.google.firebase.Firebase
+import com.example.chatferit.feature.home.SettingsScreen
 import com.google.firebase.auth.FirebaseAuth
 
 @Composable
@@ -43,6 +43,10 @@ fun MainApp()
             composable("home")
             {
                 HomeScreen(navController)
+            }
+            composable("settings")
+            {
+                SettingsScreen(navController)
             }
             composable(
                 "chat/{channelId}/{channelName}/{receiverId}", arguments = listOf(

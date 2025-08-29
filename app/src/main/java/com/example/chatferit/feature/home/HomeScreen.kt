@@ -17,10 +17,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -45,7 +48,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -53,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import androidx.navigation.compose.rememberNavController
 import com.example.chatferit.feature.users.UsersTabContent
 import com.example.chatferit.model.Channel
 import com.example.chatferit.model.UserProfile
@@ -87,9 +90,6 @@ fun HomeScreen(navController: NavController) {
     val showAddGroupChannelDialog by viewModel.showAddChannelDialog.collectAsState()
     val addGroupChannelSheetState = rememberModalBottomSheetState()
 
-    val context = LocalContext.current
-
-
 
     LaunchedEffect(snackbarMessage) {
         snackbarMessage?.let { message ->
@@ -113,24 +113,40 @@ fun HomeScreen(navController: NavController) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            if (selectedScreenRoute == BottomNavItem.Groups.route) {
-                Box(
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.Blue.copy(alpha = 0.65f))
-                        .clickable()
-                        {
-                            viewModel.onAddChannelClicked()
-                        }
-                ) {
-                    Text(
-                        text = "Add channel",
-                        modifier = Modifier.padding(16.dp),
-                        color = Color.White
-                    )
+            when (selectedScreenRoute) {
+                BottomNavItem.Chats.route -> {
+                    FloatingActionButton(
+                        onClick = { viewModel.logoutUser() },
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer, // Or your preferred color
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                            contentDescription = "Logout"
+                        )
+                    }
+                }
+
+                BottomNavItem.Groups.route -> {
+                    Box(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.Blue.copy(alpha = 0.65f))
+                            .clickable()
+                            {
+                                viewModel.onAddChannelClicked()
+                            }
+                    ) {
+                        Text(
+                            text = "Add group",
+                            modifier = Modifier.padding(16.dp),
+                            color = Color.White
+                        )
+                    }
                 }
             }
+
         },
         containerColor = Color.Black,
         bottomBar = {
@@ -187,7 +203,10 @@ fun HomeScreen(navController: NavController) {
                             if (receiverId.isNotEmpty()) {
                                 navController.navigate("chat/$channelId/$displayName/$receiverId")
                             } else {
-                                Log.e("HomeScreen", "Cannot navigate: Receiver ID is empty for: $channelId")
+                                Log.e(
+                                    "HomeScreen",
+                                    "Cannot navigate: Receiver ID is empty for: $channelId"
+                                )
                             }
                         }
                     )
@@ -241,6 +260,10 @@ fun HomeScreen(navController: NavController) {
                     )
                 }
 
+                BottomNavItem.Settings.route -> {
+                    SettingsScreen(rememberNavController())
+                }
+
             }
         }
     }
@@ -258,10 +281,10 @@ fun SearchBar(searchQuery: String, onSearchQueryChanged: (String) -> Unit) {
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = Color.White,
             unfocusedTextColor = Color.White,
-            focusedBorderColor = Color.Gray,
+            focusedBorderColor = Color.LightGray,
             unfocusedBorderColor = DarkGray,
-            focusedContainerColor = DarkGray.copy(alpha = 0.3f),
-            unfocusedContainerColor = DarkGray.copy(0.3f),
+            focusedContainerColor = DarkGray.copy(alpha = 0.7f),
+            unfocusedContainerColor = DarkGray.copy(0.1f),
             focusedPlaceholderColor = Color.Gray, unfocusedPlaceholderColor = DarkGray
         ),
         modifier = Modifier
@@ -295,10 +318,6 @@ fun ChatsScreenContent(
 
             if (otherParticipantId != null) {
                 displayName = channel.participants.get(otherParticipantId)?.displayName ?: "Chat"
-                if (displayName == null) {
-                    displayName = channel.name
-
-                }
                 ChannelDisplayWrapper(channel = channel, displayName = displayName, navigationReceiverId = otherParticipantId)
             } else {
                 Log.w(

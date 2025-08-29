@@ -14,10 +14,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.chatferit.feature.auth.signin.SignInScreen
 import com.example.chatferit.feature.auth.signup.SignUpScreen
@@ -49,12 +49,10 @@ fun observeFirebaseAuth(): State<FirebaseUser?> {
 }
 
 @Composable
-fun MainApp()
+fun MainApp(navController: NavHostController)
 {
     Surface(modifier = Modifier.fillMaxSize())
     {
-        val navController = rememberNavController()
-
         val currentUserState: State<FirebaseUser?> = observeFirebaseAuth()
         val currentUser: FirebaseUser? by currentUserState
 
@@ -64,10 +62,10 @@ fun MainApp()
 
         LaunchedEffect(startDestination, navController) {
             val currentGraphStartRoute = navController.graph.findStartDestination().route
-            if (currentGraphStartRoute != startDestination) {
+            if (currentGraphStartRoute != startDestination && navController.currentBackStackEntry?.destination?.route != startDestination) {
                 Log.d("MainApp", "Start destination changed from $currentGraphStartRoute to $startDestination. Navigating.")
                 navController.navigate(startDestination) {
-                    popUpTo(navController.graph.id) { // Pop the entire current graph
+                    popUpTo(navController.graph.id) {
                         inclusive = true
                     }
                     launchSingleTop = true
@@ -113,12 +111,12 @@ fun MainApp()
                     }
                 )) {backStackEntry ->
                 val channelId = backStackEntry.arguments?.getString("channelId") ?: ""
-                val channelName = backStackEntry.arguments?.getString("channelName") ?: ""
+                val channelName = backStackEntry.arguments?.getString("channelName") ?: "Chat"
                 val receiverId = backStackEntry.arguments?.getString("receiverId") ?: ""
 
                 Log.d("MainAppNav", "ChatScreenNav: channelId = '$channelId', channelName = '$channelName', receiverId = '$receiverId'")
 
-                if (channelId.isNotEmpty() && receiverId.isNotEmpty()) {
+                if (channelId.isNotEmpty()) {
                     ChatScreen(
                         navController = navController,
                         channelId = channelId,

@@ -39,6 +39,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -79,9 +80,9 @@ fun ChatScreen(
     navController: NavController,
     channelId: String,
     channelName: String,
-    receiverId: String
+    receiverId: String,
+    viewModel: ChatViewModel = hiltViewModel()
 ) {
-    val viewModel: ChatViewModel = hiltViewModel()
     val context = LocalContext.current
 
     val selectDialog = remember { mutableStateOf(false) }
@@ -97,6 +98,8 @@ fun ChatScreen(
             Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
         }
     }
+
+
 
     val cameraImageLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
@@ -149,8 +152,14 @@ fun ChatScreen(
                 .padding(paddingValues)
         ) {
 
-            LaunchedEffect(key1 = channelId) {
+            DisposableEffect (key1 = viewModel, key2 = channelId) {
                 viewModel.ListenForMessages(channelId)
+                viewModel.setUserViewingChat(true)
+                onDispose {
+                    if (viewModel.currentListeningChannelId.value == channelId) {
+                        viewModel.setUserViewingChat(false)
+                    }
+                }
             }
 
             val messages = viewModel.messages.collectAsState().value

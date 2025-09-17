@@ -6,11 +6,13 @@ import androidx.lifecycle.viewModelScope
 import com.example.chatferit.data.repository.IAuthRepository
 import com.example.chatferit.data.repository.UserRepository
 import com.example.chatferit.model.UserProfile
+import com.example.chatferit.model.UserPublicKeys
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.database.FirebaseDatabase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -49,19 +51,29 @@ class AuthViewModel @Inject constructor(
                         "AuthViewModel",
                         "User (${user.uid}) logged in. Calling performKeySetupIfNeeded."
                     )
-                    performKeySetupIfNeeded(user.uid)
+                    performKeySetupIfNeededAndObserve(user.uid)
                 } else {
                     Log.d("AuthViewModel", "User logged out. Resetting _keySetupState to Idle.")
                     _keySetupState.value = KeySetupState.Idle
+                    _authScreenState.value = AuthScreenState.Idle
                 }
             }
         }
     }
 
-    fun performKeySetupIfNeeded(userId: String) {
+    private suspend fun internalSetupUserKeys(userId: String): Result<UserPublicKeys> {
+        Log.d("AuthViewModel", "Starting internal key setup for user (suspend): $userId")
+        return userRepository.setupUserKeysIfNeeded(userId)
+    }
+
+    private fun performKeySetupIfNeededAndObserve(userId: String) {
         if (_keySetupState.value is KeySetupState.Loading || _keySetupState.value is KeySetupState.Success) {
-            Log.d("AuthViewModel", "Key setup already loading or successful, skipping.")
-            return
+
+            val successState = keySetupState.value as? KeySetupState.Success
+            if (successState == null) {
+                Log.d("AuthViewModel", "Key setup already loading or successful, skipping.")
+                return
+            }
         }
 
         _keySetupState.value = KeySetupState.Loading
@@ -86,27 +98,33 @@ class AuthViewModel @Inject constructor(
         _authScreenState.value = AuthScreenState.Loading
         val fullName = "$name $surname"
         Log.d("AuthViewModel", "Attempting sign up with email: $email, name: $fullName")
+
         viewModelScope.launch {
             try {
                 val authResult =
                     firebaseAuth.createUserWithEmailAndPassword(email, password).await()
-                authResult.user?.let { firebaseUser ->
-                    val profileUpdates = UserProfileChangeRequest.Builder()
-                        .setDisplayName(fullName)
-                        .build()
-                    firebaseUser.updateProfile(profileUpdates).await()
+                val firebaseUser = authResult.user
+                    ?: throw IllegalStateException("Firebase user was null after successful account creation.")
+                Log.i("AuthViewModel", "Firebase Auth user created: ${firebaseUser.uid}")
 
-                    createUserProfileInRtdb(firebaseUser, fullName)
+                 val profileUpdates = UserProfileChangeRequest.Builder()
+                     .setDisplayName(fullName)
+                     .build()
+                firebaseUser.updateProfile(profileUpdates).await()
 
-                    Log.i(
-                        "AuthViewModel",
-                        "Sign up and profile update successful for user: ${firebaseUser.uid}."
-                    )
+                Log.i("AuthViewModel", "Firebase user profile updated: ${firebaseUser.uid}")
+
+                val profileAndKeySetupResult = createUserProfileInRtdb(firebaseUser, fullName)
+
+                if (profileAndKeySetupResult.isSuccess) {
+                    Log.i("AuthViewModel", "Sign up, profile creation and key setup successful for user: ${firebaseUser.uid}.")
                     _authScreenState.value = AuthScreenState.AuthSuccess(firebaseUser)
-                } ?: run {
-                    Log.e("AuthViewModel", "Sign up failed: Firebase user is null. Email: $email")
-                    _authScreenState.value =
-                        AuthScreenState.AuthError("Sign up failed: Firebase user is null.")
+                } else {
+                    val error = profileAndKeySetupResult.exceptionOrNull()
+                    Log.e("AuthViewModel", "Failed during profile/key setup for ${firebaseUser.uid}: ${error?.message}", error)
+                    _authScreenState.value = AuthScreenState.AuthError(error?.message ?: "Profile or Key setup failed.")
+                    firebaseUser.delete().await()
+                    Log.w("AuthViewModel", "Partially created Firebase Auth user ${firebaseUser.uid} has been deleted due to setup failure.")
                 }
             } catch (e: Exception) {
                 Log.e("AuthViewModel", "Sign up exception for email $email: ${e.message}", e)
@@ -140,7 +158,7 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    private fun createUserProfileInRtdb(firebaseUser: FirebaseUser, fullName: String) {
+    private suspend fun createUserProfileInRtdb(firebaseUser: FirebaseUser, fullName: String): Result<UserPublicKeys> {
         val userId = firebaseUser.uid
         val userEmail = firebaseUser.email ?: ""
         val userProfileRef = database.getReference("users").child(userId)
@@ -151,27 +169,38 @@ class AuthViewModel @Inject constructor(
             email = userEmail,
             createdAt = System.currentTimeMillis()
         )
+        val profileCreationDeferred = CompletableDeferred<Result<Unit>>()
+
         userProfileRef.setValue(newUserProfile)
             .addOnSuccessListener {
                 Log.i("AuthViewModel", "User profile created in RTDB for $userId")
-                performKeySetupIfNeeded(userId)
+                profileCreationDeferred.complete(Result.success(Unit))
             }
             .addOnFailureListener { e ->
                 Log.e("AuthViewModel", "Failed to create user profile in RTDB for $userId", e)
                 _authScreenState.value = AuthScreenState.AuthError("Failed to save profile.")
+                profileCreationDeferred.complete(Result.failure(e))
             }
-    }
 
-    fun signOut() {
-        Log.d("AuthViewModel", "Signing out user.")
-        firebaseAuth.signOut()
-    }
+        val profileResult = profileCreationDeferred.await()
+        if (profileResult.isFailure) {
+            return Result.failure(profileResult.exceptionOrNull() ?: Exception("Failed to create profile in RTDB."))
+        }
 
-    fun retryKeySetup() {
-        _currentUser.value?.uid?.let { userId ->
-            Log.d("AuthViewModel", "Retrying key setup for user: $userId")
-            _keySetupState.value = KeySetupState.Idle
-            performKeySetupIfNeeded(userId)
-        } ?: Log.w("AuthViewModel", "User ID is null, not retrying key setup.")
+        Log.i("AuthViewModel", "Profile created for $userId, proceeding to key setup.")
+
+        val keyResult = internalSetupUserKeys(userId)
+
+        if (keyResult.isSuccess) {
+            keyResult.getOrNull()?.let { keys ->
+                _keySetupState.value = KeySetupState.Success(keys)
+            }
+        } else {
+            _keySetupState.value = KeySetupState.Error(keyResult.exceptionOrNull()?.message ?: "Key setup failed during sign up.")
+        }
+        return keyResult
+    }
+    fun resetAuthScreenState() {
+        _authScreenState.value = AuthScreenState.Idle
     }
 }

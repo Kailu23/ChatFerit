@@ -74,9 +74,8 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-    implementation("androidx.compose.material:material-icons-core:1.7.8") // Or your compose BOM version
-    implementation("androidx.compose.material:material-icons-extended:1.7.8") // Or your compose BOM version
-
+    implementation("androidx.compose.material:material-icons-core:1.7.8")
+    implementation("androidx.compose.material:material-icons-extended:1.7.8")
 
     implementation(libs.dagger.hilt.android)
     implementation(libs.firebase.crashlytics.buildtools)
@@ -95,4 +94,5 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("com.google.crypto.tink:tink-android:1.11.0")
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
 }

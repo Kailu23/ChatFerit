@@ -3,8 +3,10 @@ package com.example.chatferit.di
 import com.example.chatferit.data.repository.AuthRepository
 import com.example.chatferit.data.repository.FriendRepository
 import com.example.chatferit.data.repository.IAuthRepository
+import com.example.chatferit.data.repository.ThemeRepository
 import com.example.chatferit.data.repository.UserRepository
 import com.example.chatferit.data.repository.iFriendRepository
+import com.example.chatferit.data.repository.iThemeRepository
 import com.example.chatferit.data.repository.iUserRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
@@ -25,6 +27,10 @@ abstract class RepositoryModule {
         impl: UserRepository
     ): iUserRepository
 
+    @Binds
+    @Singleton
+    abstract fun bindThemeRepository(themeRepository: ThemeRepository) : iThemeRepository
+
     companion object{
         @Provides
         @Singleton
@@ -40,6 +46,8 @@ abstract class RepositoryModule {
         fun provideAuthRepository(firebaseAuth: FirebaseAuth): IAuthRepository {
             return AuthRepository(firebaseAuth)
         }
+
+
     }
 
 }

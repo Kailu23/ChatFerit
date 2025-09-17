@@ -3,7 +3,6 @@ package com.example.chatferit.feature.auth.signup
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -12,8 +11,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -26,7 +28,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -111,56 +112,102 @@ fun SignUpScreen(navController: NavController) {
         ){
             Image(painter = painterResource(id = R.drawable.logo), contentDescription = null,
                 modifier = Modifier
-                    .size(200.dp)
-                    .background(Color.White)
+                    .size(150.dp)
+            )
+
+            Spacer(modifier = Modifier.size(24.dp))
+
+            val textFieldColors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                errorBorderColor = MaterialTheme.colorScheme.error,
+                focusedLabelColor = MaterialTheme.colorScheme.primary,
+                unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                errorLabelColor = MaterialTheme.colorScheme.error,
+                cursorColor = MaterialTheme.colorScheme.primary,
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                errorTextColor = MaterialTheme.colorScheme.onErrorContainer,
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f),
+                errorContainerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f)
             )
             OutlinedTextField(
                 value = name,
-                onValueChange = { name = it},
-                placeholder = {Text(text = "Name")},
-                label = { Text(text = "Name")})
+                onValueChange = { name = it },
+                placeholder = { Text(text = "Name") },
+                label = { Text(text = "Name") },
+                colors = textFieldColors
+            )
+            Spacer(modifier = Modifier.size(8.dp))
             OutlinedTextField(
                 value = surname,
-                onValueChange = { surname = it},
-                placeholder = {Text(text = "Surname")},
-                label = { Text(text = "Surname")})
+                onValueChange = { surname = it },
+                placeholder = { Text(text = "Surname") },
+                label = { Text(text = "Surname") },
+                colors = textFieldColors
+            )
+            Spacer(modifier = Modifier.size(8.dp))
             OutlinedTextField(
                 value = email,
-                onValueChange = { email = it},
-                placeholder = {Text(text = "E-mail")},
-                label = { Text(text = "E-mail")})
+                onValueChange = { email = it },
+                placeholder = { Text(text = "E-mail") },
+                label = { Text(text = "E-mail") },
+                colors = textFieldColors
+            )
+            Spacer(modifier = Modifier.size(8.dp))
             OutlinedTextField(
                 value = password,
-                onValueChange = { password = it},
-                placeholder = {Text(text = "Password")},
-                label = { Text(text = "Password")},
-                visualTransformation = PasswordVisualTransformation())
+                onValueChange = { password = it },
+                placeholder = { Text(text = "Password") },
+                label = { Text(text = "Password") },
+                visualTransformation = PasswordVisualTransformation(),
+                colors = textFieldColors
+            )
+            Spacer(modifier = Modifier.size(8.dp))
             OutlinedTextField(
                 value = confirmPassword,
-                onValueChange = { confirmPassword = it},
-                placeholder = {Text(text = "Confirm password")},
-                label = { Text(text = "Confirm password")},
+                onValueChange = { confirmPassword = it },
+                placeholder = { Text(text = "Confirm password") },
+                label = { Text(text = "Confirm password") },
                 visualTransformation = PasswordVisualTransformation(),
-                isError = password.isNotEmpty() && confirmPassword.isNotEmpty() && password != confirmPassword)
+                isError = password.isNotEmpty() && confirmPassword.isNotEmpty() && password != confirmPassword,
+                colors = textFieldColors
+            )
 
             Spacer(modifier = Modifier.size(16.dp))
 
             if (authScreenState is AuthScreenState.Loading || keySetupState is KeySetupState.Loading) {
                 CircularProgressIndicator()
             } else {
-                Button(onClick = {
-                    viewModel.signUpWithEmailAndPassword(
-                        name = name,
-                        surname = surname,
-                        email = email,
-                        password = password
+                Button(
+                    onClick = {
+                        viewModel.signUpWithEmailAndPassword(
+                            name = name,
+                            surname = surname,
+                            email = email,
+                            password = password
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = name.isNotEmpty() && surname.isNotEmpty() && email.isNotEmpty() && password.isNotEmpty() && confirmPassword.isNotEmpty() && password == confirmPassword,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f),
+                        disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .38f)
                     )
-                    },modifier = Modifier.fillMaxWidth(),
-                    enabled = name.isNotEmpty() && surname.isNotEmpty() && email.isNotEmpty() && password.isNotEmpty() && confirmPassword.isNotEmpty() && password == confirmPassword) {
+                ) {
                     Text(text = "Sign up")
                 }
             }
-            TextButton(onClick = {navController.popBackStack()}) {
+
+            Spacer(modifier = Modifier.size(16.dp))
+
+            TextButton(onClick = {navController.popBackStack()}, colors = ButtonDefaults.textButtonColors(
+                containerColor = MaterialTheme.colorScheme.background,
+                contentColor = MaterialTheme.colorScheme.onBackground
+            ) ) {
                 Text(text = "Already have an account? Sign In!")
             }
         }

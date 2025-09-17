@@ -31,6 +31,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -50,7 +51,6 @@ import coil.compose.rememberAsyncImagePainter
 import com.example.chatferit.feature.home.SearchBar
 import com.example.chatferit.model.FriendRequest
 import com.example.chatferit.model.UserProfile
-import com.example.chatferit.ui.theme.DarkGray
 
 @Composable
 fun UsersTabContent(
@@ -74,10 +74,14 @@ fun UsersTabContent(
 
     Scaffold (
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddFriendClicked) {
+            FloatingActionButton(
+                onClick = onAddFriendClicked,
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            ) {
                 Icon(Icons.Filled.Add, contentDescription = "Add Friend")
             }
-        }, containerColor = Color.Black
+        }, containerColor = MaterialTheme.colorScheme.background
     ){ paddingValues ->
         Column(modifier = Modifier
             .padding(paddingValues)
@@ -86,7 +90,7 @@ fun UsersTabContent(
                 text = "Friends & Requests",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 12.dp)
             )
             if (friendRequestsList.isNotEmpty()) {
@@ -99,7 +103,7 @@ fun UsersTabContent(
                         FriendRequestItem(request = request, onAccept = {onAcceptRequest(request)},
                             onDecline = {onDeclineRequest(request)}
                         )
-                        HorizontalDivider(color = DarkGray.copy(alpha = 0.5f)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
                         )
                     }
                 }
@@ -132,7 +136,7 @@ fun UsersTabContent(
                 ){
                     Text(
                         text = "No friends found for \"$searchQuery\"",
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.tertiary
                     )
                 }
             }else if(friendsList.isNotEmpty()){
@@ -148,7 +152,7 @@ fun UsersTabContent(
                             onClick = { onFriendClicked(userProfile) }
                         )
                         HorizontalDivider(
-                            color = DarkGray.copy(alpha = 0.5f)
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
                         )
                     }
                 }
@@ -162,7 +166,7 @@ fun UsersTabContent(
                 ){
                     Text(
                         text = "You have no friends yet. Add some or accept requests!",
-                        color = Color.Gray,
+                        color = MaterialTheme.colorScheme.tertiary,
                         textAlign = TextAlign.Center
                     )
                 }
@@ -191,7 +195,7 @@ fun SectionTitle(title : String) {
         text = title,
         fontSize = 18.sp,
         fontWeight = FontWeight.SemiBold,
-        color = Color.LightGray,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)
     )
 }
@@ -221,11 +225,16 @@ fun FriendRequestItem(
                 contentDescription = "${request.senderName}'s profile picture.",
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(CircleShape),
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.background),
                 contentScale = ContentScale.Crop
             )
             Spacer(modifier = Modifier.width(12.dp))
-            Text(text = request.senderName, color = Color.White, fontWeight = FontWeight.Medium)
+            Text(
+                text = request.senderName,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Medium
+            )
         }
         Row {
             IconButton(onClick = onAccept, modifier = Modifier.size(36.dp)) {
@@ -258,14 +267,14 @@ fun FriendItem(userProfile: UserProfile, onClick: () -> Unit) {
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(DarkGray),
+                .background(MaterialTheme.colorScheme.primary),
             contentScale = ContentScale.Crop
         )
         Spacer(modifier = Modifier.width(12.dp))
         Column{
             Text(
                 text = userProfile.displayName,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onPrimary,
                 fontWeight = FontWeight.Medium,
                 fontSize = 18.sp
             )
@@ -307,14 +316,14 @@ fun AddFriendDialog(
                     },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = Color.LightGray.copy(alpha = 0.3f),
-                        unfocusedContainerColor = DarkGray.copy(0.3f),
-                        disabledContainerColor = DarkGray.copy(0.3f),
-                        focusedBorderColor = Color.LightGray,
-                        unfocusedBorderColor = Color.LightGray,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        cursorColor = Color.White
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        unfocusedContainerColor = MaterialTheme.colorScheme.primary.copy(0.3f),
+                        disabledContainerColor = MaterialTheme.colorScheme.primary.copy(0.3f),
+                        focusedBorderColor = MaterialTheme.colorScheme.tertiary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.tertiary,
+                        focusedTextColor = MaterialTheme.colorScheme.onPrimary,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onPrimary,
+                        cursorColor = MaterialTheme.colorScheme.onPrimary
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -322,11 +331,14 @@ fun AddFriendDialog(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally), )
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 } else if (searchResults.isNotEmpty()) {
                     Text(
                         "Results:",
-                        color = Color.LightGray,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 14.sp,
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
@@ -340,20 +352,31 @@ fun AddFriendDialog(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Column (modifier = Modifier.weight(1f)) {
-                                    Text(user.displayName, color = Color.White)
+                                    Text(
+                                        user.displayName,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
                                     user.email?.let {
-                                        Text(it, color = Color.Gray, fontSize = 12.sp)
+                                        Text(
+                                            it,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 12.sp
+                                        )
                                     }
                                 }
                                 Button(onClick = {onSendRequestClicked(user.uid) }) {
                                     Text(text = "Add")
                                 }
                             }
-                            HorizontalDivider(color = DarkGray.copy(alpha = 0.3f))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
                         }
                     }
                 } else if ( searchQuery.length > 3 && !isLoading) {
-                    Text("No users found", color = Color.Gray, fontSize = 14.sp)
+                    Text(
+                        "No users found",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 14.sp
+                    )
                 }
             }
         },
@@ -363,6 +386,6 @@ fun AddFriendDialog(
                 Text(text = "Close", color = Color.LightGray)
             }
         },
-        containerColor = DarkGray.copy(alpha = 0.9f)
+        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
     )
 }

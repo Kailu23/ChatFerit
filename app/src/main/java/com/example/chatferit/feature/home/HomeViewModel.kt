@@ -323,7 +323,7 @@ class HomeViewModel @Inject constructor(
         _selectedScreenRoute.value = route
     }
 
-    fun onAddChannelClicked() {
+    fun onAddGroupChannelClicked() {
         _showAddChannelDialog.value = true
     }
 

@@ -51,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter.Companion.tint
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -65,7 +66,6 @@ import coil.compose.AsyncImage
 import com.example.chatferit.R
 import com.example.chatferit.feature.home.ChannelItem
 import com.example.chatferit.model.Message
-import com.example.chatferit.ui.theme.DarkGray
 import com.example.chatferit.ui.theme.Purple
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
@@ -143,7 +143,7 @@ fun ChatScreen(
         }
 
     Scaffold(
-        containerColor = Color.Black
+        containerColor = MaterialTheme.colorScheme.primaryContainer
     ) {paddingValues ->
 
         Column(
@@ -205,6 +205,11 @@ fun ContentSelectionDialog(
     onDismiss: () -> Unit
 ) {
     AlertDialog(
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        title = { Text(text = "Select your source.") },
+        text = { Text(text = "Would you like to pick an image from the gallery or use the camera?") },
         onDismissRequest = { onDismiss },
         confirmButton = {
             TextButton(onClick = {
@@ -213,7 +218,7 @@ fun ContentSelectionDialog(
             }) {
                 Text(
                     text = "Camera",
-                    color = DarkGray
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         },
@@ -224,11 +229,11 @@ fun ContentSelectionDialog(
             }) {
                 Text(
                     text = "Gallery",
-                    color = DarkGray
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
-        }, title = { Text(text = "Select your source.") },
-        text = { Text(text = "Would you like to pick an image from the gallery or use the camera?") })
+        },
+    )
 
 
 }
@@ -281,7 +286,7 @@ fun ChatMessages(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(DarkGray)
+                .background(MaterialTheme.colorScheme.primary)
                 .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -291,7 +296,8 @@ fun ChatMessages(
                 Image(
                     painter = painterResource(R.drawable.outline_attach_file_24),
                     contentDescription = "Attach File",
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(24.dp),
+                    colorFilter = tint(MaterialTheme.colorScheme.onPrimary)
                 )
             }
             TextField(
@@ -309,16 +315,16 @@ fun ChatMessages(
                     }
                 ),
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = DarkGray,
-                    unfocusedContainerColor = DarkGray,
-                    disabledContainerColor = DarkGray,
-                    cursorColor = Purple,
+                    focusedContainerColor = MaterialTheme.colorScheme.primary,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.primary,
+                    disabledContainerColor = MaterialTheme.colorScheme.primary,
+                    cursorColor = MaterialTheme.colorScheme.onPrimary,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedPlaceholderColor = Color.Gray,
-                    unfocusedPlaceholderColor = Color.Gray
+                    focusedTextColor = MaterialTheme.colorScheme.onPrimary,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onPrimary,
+                    focusedPlaceholderColor = MaterialTheme.colorScheme.tertiary,
+                    unfocusedPlaceholderColor = MaterialTheme.colorScheme.tertiary
                 )
             )
 
@@ -326,7 +332,7 @@ fun ChatMessages(
                 Icon(
                     imageVector = if(sendEncrypted) Icons.Filled.Lock else Icons.Filled.LockOpen,
                     contentDescription = if(sendEncrypted) "Send Encrypted" else "Send Unencrypted",
-                    tint = if (sendEncrypted) Purple else Color.Gray,
+                    tint = if (sendEncrypted) Purple else MaterialTheme.colorScheme.tertiary,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -345,6 +351,7 @@ fun ChatMessages(
                     painter = painterResource(R.drawable.send),
                     contentDescription = "Send",
                     modifier = Modifier.size(24.dp),
+                    colorFilter = tint(MaterialTheme.colorScheme.onPrimary)
                 )
             }
         }
@@ -354,8 +361,8 @@ fun ChatMessages(
 @Composable
 fun ChatBubble(message: Message) {
     val isCurrentUser: Boolean = message.senderId == Firebase.auth.currentUser?.uid
-    val bubbleColor = if (isCurrentUser) Purple else DarkGray
-    val textColor = Color.White
+    val bubbleColor = if (isCurrentUser) Purple else MaterialTheme.colorScheme.primary
+    val textColor = MaterialTheme.colorScheme.onPrimary
 
     val bubbleAlignment = if (isCurrentUser) Alignment.CenterEnd else Alignment.CenterStart
     Box(
@@ -395,13 +402,12 @@ fun ChatBubble(message: Message) {
                         .padding(end = 8.dp)
                 )
             }
-            Column()
-            {
+            Column {
                 if (!isCurrentUser && message.senderName != null) {
                     Text(
                         text = message.senderName,
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.LightGray,
+                        color = textColor.copy(alpha = 0.7f),
                         modifier = Modifier.padding(bottom = 2.dp)
                     )
                 }

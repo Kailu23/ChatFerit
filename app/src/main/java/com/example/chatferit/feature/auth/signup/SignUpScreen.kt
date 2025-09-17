@@ -1,5 +1,6 @@
 package com.example.chatferit.feature.auth.signup
 
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -35,7 +36,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.example.chatferit.R
-import com.example.chatferit.feature.auth.*
+import com.example.chatferit.feature.auth.AuthScreenState
+import com.example.chatferit.feature.auth.AuthViewModel
+import com.example.chatferit.feature.auth.KeySetupState
 
 @Composable
 fun SignUpScreen(navController: NavController) {
@@ -60,22 +63,29 @@ fun SignUpScreen(navController: NavController) {
     }
     val context = LocalContext.current
 
-    LaunchedEffect(key1 = authScreenState, key2 = keySetupState)
-    {
-        if (authScreenState is AuthScreenState.AuthSuccess && keySetupState is KeySetupState.Success) {
-            Toast.makeText(context, "Sign Up Successful!", Toast.LENGTH_SHORT).show()
-            navController.navigate("home") {
-                popUpTo(navController.graph.startDestinationId) { inclusive = true }
+    LaunchedEffect(authScreenState) {
+        when (val currentAuthScreenState = authScreenState) {
+            is AuthScreenState.AuthSuccess -> {
+                Toast.makeText(context, "Sign Up Fully Successful!", Toast.LENGTH_SHORT).show()
+                navController.navigate("home") {
+                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                }
+                viewModel.resetAuthScreenState() // Reset after handling
             }
-        }
-    }
-    LaunchedEffect(authScreenState){
-        if (authScreenState is AuthScreenState.AuthError) {
-            Toast.makeText(
-                context,
-                (authScreenState as AuthScreenState.AuthError).message,
-                Toast.LENGTH_LONG
-            ).show()
+            is AuthScreenState.AuthError -> {
+                Toast.makeText(
+                    context,
+                    "Sign Up Error: ${currentAuthScreenState.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+                viewModel.resetAuthScreenState() // Reset after handling
+            }
+            AuthScreenState.Loading -> {
+                Log.d("SignUpScreen", "AuthScreenState is Loading")
+            }
+            AuthScreenState.Idle -> {
+                Log.d("SignUpScreen", "AuthScreenState is Idle")
+            }
         }
     }
 

@@ -13,11 +13,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
 import com.example.chatferit.feature.auth.signin.SignInScreen
 import com.example.chatferit.feature.auth.signup.SignUpScreen
@@ -55,61 +55,72 @@ fun MainApp(navController: NavHostController)
     {
         val currentUserState: State<FirebaseUser?> = observeFirebaseAuth()
         val currentUser: FirebaseUser? by currentUserState
+        var hasPerformedInitialNavigation = remember { mutableStateOf(false) }
 
-        val startDestination = if (currentUser != null) "home" else "signin"
-        Log.d("MainApp", "Recalculating startDestination. CurrentUser: ${currentUser?.uid}, StartDest: $startDestination")
+        val targetGraphRoute = if (currentUser != null) AppRoutes.HOME else AppRoutes.AUTH_GRAPH_ROUTE
 
+        LaunchedEffect(currentUser, navController) { // Key on currentUser directly
+            val currentRoute = navController.currentBackStackEntry?.destination?.route
+            Log.d("MainApp", "Auth Nav Check: User=${currentUser?.uid}, TargetGraph=$targetGraphRoute, CurrentRoute=$currentRoute, InitialNavDone=$hasPerformedInitialNavigation")
 
-        LaunchedEffect(startDestination, navController) {
-            val currentGraphStartRoute = navController.graph.findStartDestination().route
-            if (currentGraphStartRoute != startDestination && navController.currentBackStackEntry?.destination?.route != startDestination) {
-                Log.d("MainApp", "Start destination changed from $currentGraphStartRoute to $startDestination. Navigating.")
-                navController.navigate(startDestination) {
-                    popUpTo(navController.graph.id) {
-                        inclusive = true
-                    }
-                    launchSingleTop = true
+            if (!hasPerformedInitialNavigation.value) {
+                navController.navigate(targetGraphRoute) {
+                    popUpTo(navController.graph.id) { inclusive = true }
                 }
+                hasPerformedInitialNavigation.value = true
+                Log.d("MainApp", "Performed initial navigation to $targetGraphRoute")
             } else {
-                Log.d("MainApp", "Start destination ($startDestination) matches current graph start ($currentGraphStartRoute). No explicit navigation needed by this LaunchedEffect.")
+                if (currentUser != null) {
+                    if (currentRoute == AppRoutes.SIGN_IN || currentRoute == AppRoutes.SIGN_UP) {
+                        Log.d("MainApp", "User logged IN, but on auth screen ($currentRoute). Deferring main navigation.")
+                    } else if (currentRoute != AppRoutes.HOME && !currentRoute?.startsWith("chat/")!!) { // And not already home or in chat
+                        Log.d("MainApp", "User logged IN, not on auth screen. Navigating to HOME from $currentRoute.")
+                        navController.navigate(AppRoutes.HOME) {
+                            popUpTo(navController.graph.id) { inclusive = true }
+                        }
+                    }
+                } else {
+                    if (currentRoute != AppRoutes.SIGN_IN && currentRoute != AppRoutes.AUTH_GRAPH_ROUTE) { // And not already on an auth screen
+                        Log.d("MainApp", "User logged OUT. Navigating to AUTH_GRAPH from $currentRoute.")
+                        navController.navigate(AppRoutes.AUTH_GRAPH_ROUTE) {
+                            popUpTo(navController.graph.id) { inclusive = true }
+                        }
+                    }
+                }
             }
         }
 
         NavHost(
             navController = navController,
-            startDestination = startDestination,
-        )
-        {
-            composable("signin")
-            {
-                SignInScreen(navController)
+            startDestination = AppRoutes.AUTH_GRAPH_ROUTE,
+        ) {
+            navigation(
+                route = AppRoutes.AUTH_GRAPH_ROUTE,
+                startDestination = AppRoutes.SIGN_IN
+            ) {
+                composable(AppRoutes.SIGN_IN){
+                    SignInScreen(navController)
+                }
+                composable(AppRoutes.SIGN_UP){
+                    SignUpScreen(navController)
+                }
             }
-            composable("signup")
-            {
-                SignUpScreen(navController)
-            }
-            composable("home")
+            composable(AppRoutes.HOME)
             {
                 HomeScreen(navController)
             }
-            composable("settings")
+            composable(AppRoutes.SETTINGS)
             {
                 SettingsScreen(navController)
             }
             composable(
-                "chat/{channelId}/{channelName}/{receiverId}", arguments = listOf(
-                    navArgument(name = "channelId") {
-                        type = NavType.StringType
-                    },
-                    navArgument("channelName")
-                    {
-                        type = NavType.StringType
-                    },
-                    navArgument("receiverId")
-                    {
-                        type = NavType.StringType
-                    }
-                )) {backStackEntry ->
+                route = AppRoutes.CHAT_ROUTE,
+                arguments = listOf(
+                    navArgument("channelId") { type = NavType.StringType},
+                    navArgument("channelName") { type = NavType.StringType},
+                    navArgument("receiverId") { type = NavType.StringType}
+                )
+            ) { backStackEntry ->
                 val channelId = backStackEntry.arguments?.getString("channelId") ?: ""
                 val channelName = backStackEntry.arguments?.getString("channelName") ?: "Chat"
                 val receiverId = backStackEntry.arguments?.getString("receiverId") ?: ""

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -33,6 +34,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,7 +58,6 @@ import androidx.navigation.compose.rememberNavController
 import com.example.chatferit.feature.users.UsersTabContent
 import com.example.chatferit.model.Channel
 import com.example.chatferit.model.UserProfile
-import com.example.chatferit.ui.theme.DarkGray
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
@@ -101,7 +102,7 @@ fun HomeScreen(navController: NavController) {
             onDismissRequest = { viewModel.onDismissAddChannelDialog() },
             sheetState = addGroupChannelSheetState
         ) {
-            AddChannelDialog { channelName ->
+            AddGroupChannelDialog { channelName ->
                 viewModel.addGroupChannel(channelName)
             }
         }
@@ -119,7 +120,7 @@ fun HomeScreen(navController: NavController) {
                             .background(Color.Blue.copy(alpha = 0.65f))
                             .clickable()
                             {
-                                viewModel.onAddChannelClicked()
+                                viewModel.onAddGroupChannelClicked()
                             }
                     ) {
                         Text(
@@ -132,10 +133,10 @@ fun HomeScreen(navController: NavController) {
             }
 
         },
-        containerColor = Color.Black,
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             NavigationBar(
-                containerColor = DarkGray,
+                containerColor = MaterialTheme.colorScheme.primary,
             ) {
                 bottomNavItemsList.forEach { item ->
                     NavigationBarItem(
@@ -148,11 +149,11 @@ fun HomeScreen(navController: NavController) {
                         icon = { Icon(item.icon, contentDescription = item.label) },
                         label = { Text(item.label) },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedTextColor = Color.White,
-                            unselectedTextColor = Color.DarkGray,
-                            selectedIconColor = Color.White,
-                            unselectedIconColor = Color.DarkGray,
-                            indicatorColor = Color.DarkGray
+                            selectedTextColor = MaterialTheme.colorScheme.onPrimary,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            indicatorColor = MaterialTheme.colorScheme.primary
 
                         )
                     )
@@ -263,13 +264,14 @@ fun SearchBar(searchQuery: String, onSearchQueryChanged: (String) -> Unit) {
         singleLine = true,
         shape = RoundedCornerShape(32.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = Color.White,
-            unfocusedTextColor = Color.White,
-            focusedBorderColor = Color.LightGray,
-            unfocusedBorderColor = DarkGray,
-            focusedContainerColor = DarkGray.copy(alpha = 0.7f),
-            unfocusedContainerColor = DarkGray.copy(0.1f),
-            focusedPlaceholderColor = Color.Gray, unfocusedPlaceholderColor = DarkGray
+            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+            focusedBorderColor = MaterialTheme.colorScheme.outline,
+            unfocusedBorderColor = MaterialTheme.colorScheme.primary,
+            focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+            unfocusedContainerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+            focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -333,7 +335,7 @@ fun ChatsScreenContent(
         item {
             Text(
                 text = "Private Chats",
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Black),
                 modifier = Modifier.padding(16.dp)
             )
@@ -360,7 +362,7 @@ fun ChannelItem(channelName : String, onClick : () -> Unit, modifier: Modifier) 
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(DarkGray)
+            .background(MaterialTheme.colorScheme.primary)
             .clickable { onClick() },
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -369,13 +371,13 @@ fun ChannelItem(channelName : String, onClick : () -> Unit, modifier: Modifier) 
                 .padding(8.dp)
                 .size(70.dp)
                 .clip(CircleShape)
-                .background(Color.Yellow.copy(alpha = 0.3f))
+                .background(MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f))
         ) {
             Text(
                 text = channelName[0].uppercase(),
                 modifier = Modifier
                     .align(Alignment.Center),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
                 style = TextStyle(fontSize = 32.sp),
                 textAlign = TextAlign.Center,
             )
@@ -385,7 +387,7 @@ fun ChannelItem(channelName : String, onClick : () -> Unit, modifier: Modifier) 
             text = channelName,
             modifier = Modifier
                 .padding(8.dp),
-            color = Color.White
+            color = MaterialTheme.colorScheme.onPrimary
 
         )
 
@@ -395,25 +397,44 @@ fun ChannelItem(channelName : String, onClick : () -> Unit, modifier: Modifier) 
 }
 
 @Composable
-fun AddChannelDialog(onAddChannel: (String) -> Unit) {
+fun AddGroupChannelDialog(onAddGroupChannel: (String) -> Unit) {
     val channelName = remember {
         mutableStateOf("")
     }
-    Column (
-        modifier = Modifier.padding(16.dp),
+    Column(
+        modifier = Modifier
+            .padding(16.dp)
+            .background(MaterialTheme.colorScheme.surface),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
-    ){
-        Text(text = "Add Group Channel", fontSize = 26.sp)
-        Spacer(modifier = Modifier.padding(8.dp))
-        TextField(
-            value = channelName.value, onValueChange = {
-                channelName.value = it
-            }, label = { Text(text = "Channel Name:")},
-            singleLine = true
+    ) {
+        Text(
+            text = "Add Group Channel",
+            fontSize = 26.sp,
+            color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.padding(8.dp))
-        Button(onClick = { onAddChannel(channelName.value) }, modifier = Modifier.fillMaxWidth()) {
+        TextField(
+            value = channelName.value,
+            onValueChange = {channelName.value = it},
+            label = { Text(text = "Channel Name:") },
+            singleLine = true,
+            colors = TextFieldDefaults.colors(
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                unfocusedIndicatorColor = MaterialTheme.colorScheme.outline,
+                focusedLabelColor = MaterialTheme.colorScheme.primary,
+                unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        )
+        Spacer(modifier = Modifier.padding(8.dp))
+        Button(
+            onClick = { onAddGroupChannel(channelName.value) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Text(text = "Add", fontSize = 24.sp)
 
         }

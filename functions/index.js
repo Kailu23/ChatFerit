@@ -21,9 +21,8 @@ try {
 setGlobalOptions({region: "europe-west1"});
 /**
  * Sends an FCM message manually using the HTTP v1 API.
- * This function seems to be from your existing codebase.
  * @param {string} projectId The Google Cloud Project ID.
- * @param {string} target The FCM target (e.g. topic name or device token).
+ * @param {string} target The FCM target.
  * @param {object} notificationPayload The notification part of the FCM message.
  * @param {object} dataPayload The data part of the FCM message.
  * @param {boolean} isTopic If the target is a topic or a device token.

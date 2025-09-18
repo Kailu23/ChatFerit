@@ -81,7 +81,6 @@ fun HomeScreen(navController: NavController) {
     val showAddFriendDialog by viewModel.showAddFriendDialog.collectAsState()
     val addFriendSearchQuery by viewModel.addFriendSearchQuery.collectAsState()
     val addFriendSearchResults by viewModel.addFriendSearchResults.collectAsState()
-    val isSearchingUsers by viewModel.isSearchingUsers.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarMessage by viewModel.snackbarMessage.collectAsState()
 
@@ -212,7 +211,6 @@ fun HomeScreen(navController: NavController) {
 
                         addFriendSearchQuery = addFriendSearchQuery,
                         addFriendSearchResults = addFriendSearchResults,
-                        isSearchingUsers = isSearchingUsers,
                         onAddFriendSearchQueryChanged = { newDialogQuery ->
                             viewModel.onAddFriendSearchQueryChanged(newDialogQuery)
                         },

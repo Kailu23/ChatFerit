@@ -51,6 +51,7 @@ import coil.compose.rememberAsyncImagePainter
 import com.example.chatferit.feature.home.SearchBar
 import com.example.chatferit.model.FriendRequest
 import com.example.chatferit.model.UserProfile
+import com.example.chatferit.util.Resource
 
 @Composable
 fun UsersTabContent(
@@ -66,8 +67,7 @@ fun UsersTabContent(
     onAcceptRequest: (FriendRequest) -> Unit,
     onDeclineRequest: (FriendRequest) -> Unit,
     addFriendSearchQuery: String,
-    addFriendSearchResults: List<UserProfile>,
-    isSearchingUsers: Boolean,
+    addFriendSearchResults: Resource<List<UserProfile>>,
     onAddFriendSearchQueryChanged: (String) -> Unit,
     onClearAddFriendSearch: () -> Unit
 ) {
@@ -177,7 +177,6 @@ fun UsersTabContent(
         AddFriendDialog(
             searchQuery = addFriendSearchQuery,
             searchResults = addFriendSearchResults,
-            isLoading = isSearchingUsers,
             onSearchQueryChanged = onAddFriendSearchQueryChanged,
             onDismiss = {
                 onDismissAddFriendDialog()
@@ -286,8 +285,7 @@ fun FriendItem(userProfile: UserProfile, onClick: () -> Unit) {
 @Composable
 fun AddFriendDialog(
     searchQuery: String,
-    searchResults: List<UserProfile>,
-    isLoading: Boolean,
+    searchResults: Resource<List<UserProfile>>,
     onSearchQueryChanged: (String) -> Unit,
     onDismiss: () -> Unit,
     onSendRequestClicked: (userId: String) -> Unit
@@ -305,7 +303,7 @@ fun AddFriendDialog(
                     label = {
                         Text(
                             text = "Enter friend's email or full name",
-                            color = Color.Gray,
+                            color = MaterialTheme.colorScheme.tertiary,
                             fontSize = 12.sp
                         )
                     },
@@ -325,53 +323,50 @@ fun AddFriendDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.CenterHorizontally),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                } else if (searchResults.isNotEmpty()) {
-                    Text(
-                        "Results:",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                    LazyColumn (modifier = Modifier.heightIn(max = 150.dp)){
-                        items(searchResults, key = { it.uid}) { user ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column (modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        user.displayName,
-                                        color = MaterialTheme.colorScheme.onSurface
+                when (searchResults) {
+                    is Resource.Loading -> {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .padding(8.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    is Resource.Success -> {
+                        val users = searchResults.data
+                        if (users.isNullOrEmpty() && searchQuery.length >= 2) {
+                            Text(
+                                text = "No users found matching your search.",
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        } else if (users != null && users.isNotEmpty()) {
+                            LazyColumn (modifier = Modifier.heightIn(max = 200.dp)){
+                                items(users) {user ->
+                                    UserRowForAddFriend(
+                                        userProfile = user,
+                                        onAddClick = {
+                                            onSendRequestClicked(user.uid)
+                                        }
                                     )
-                                    user.email?.let {
-                                        Text(
-                                            it,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontSize = 12.sp
-                                        )
-                                    }
-                                }
-                                Button(onClick = {onSendRequestClicked(user.uid) }) {
-                                    Text(text = "Add")
                                 }
                             }
-                            HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                        } else if (searchQuery.length < 2 && searchQuery.isNotEmpty()) {
+                            Text(
+                                text = "Type atleast 2 characters to search.",
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        } else {
+                            Text(text = "Type to search.", modifier = Modifier.padding(16.dp))
                         }
                     }
-                } else if ( searchQuery.length > 3 && !isLoading) {
-                    Text(
-                        "No users found",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 14.sp
-                    )
+                    is Resource.Error -> {
+                        Text(
+                            text = searchResults.message ?: "An error occurred during search.",
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(16.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             }
         },
@@ -383,4 +378,25 @@ fun AddFriendDialog(
         },
         containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
     )
+}
+
+@Composable
+fun UserRowForAddFriend(
+    userProfile: UserProfile,
+    onAddClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column (modifier = Modifier.weight(1f)) {
+            Text(userProfile.displayName, fontWeight = FontWeight.Bold)
+            userProfile.email?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        }
+        Button(onClick = onAddClick) {
+            Text(text = "Add")
+        }
+    }
 }

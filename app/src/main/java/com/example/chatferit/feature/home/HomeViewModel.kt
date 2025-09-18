@@ -63,16 +63,14 @@ class HomeViewModel @Inject constructor(
     val incomingFriendRequests: StateFlow<List<FriendRequest>> = _incomingFriendRequests.asStateFlow()
 
     private val _sentFriendRequests = MutableStateFlow<List<FriendRequest>>(emptyList())
-    val sentFriendRequests: StateFlow<List<FriendRequest>> = _sentFriendRequests.asStateFlow()
+    val sentFriendRequests: StateFlow<List<FriendRequest>> = _sentFriendRequests.asStateFlow() //TODO: Show friend requests in UI
 
     private val _showAddFriendDialog = MutableStateFlow(false)
     val showAddFriendDialog = _showAddFriendDialog.asStateFlow()
     private val _addFriendSearchQuery = MutableStateFlow("")
     val addFriendSearchQuery: StateFlow<String> = _addFriendSearchQuery.asStateFlow()
-    private val _addFriendSearchResults = MutableStateFlow<List<UserProfile>>(emptyList())
-    val addFriendSearchResults: StateFlow<List<UserProfile>> = _addFriendSearchResults.asStateFlow()
-    private val _isSearchingUsers = MutableStateFlow(false)
-    val isSearchingUsers: StateFlow<Boolean> = _isSearchingUsers.asStateFlow()
+    private val _addFriendSearchResults = MutableStateFlow<Resource<List<UserProfile>>>(Resource.Success(emptyList()))
+    val addFriendSearchResults: StateFlow<Resource<List<UserProfile>>> = _addFriendSearchResults.asStateFlow()
 
     private var searchJob: Job? = null
     private val currentUserId: String? = firebaseAuth.currentUser?.uid
@@ -474,56 +472,20 @@ class HomeViewModel @Inject constructor(
         if (query.length > 3) {
             searchJob = viewModelScope.launch {
                 delay(300)
-                _isSearchingUsers.value = true
-                _addFriendSearchResults.value = emptyList()
+                _addFriendSearchResults.value = Resource.Loading()
 
-                try {
-                    _addFriendSearchResults.value = searchUsers(query)
-                } catch (e: Exception) {
-                    Log.e("HomeViewModel", "Error searching users", e)
-                    _addFriendSearchResults.value = emptyList()
-                } finally {
-                    _isSearchingUsers.value = false
-                }
+                 val result = userRepository.searchUsers(query)
+                _addFriendSearchResults.value = result
             }
         } else {
-            _addFriendSearchResults.value = emptyList()
+            _addFriendSearchResults.value = Resource.Success(emptyList())
         }
-    }
-
-    suspend fun searchUsers(query: String): List<UserProfile> {
-        if(query.isBlank() || query.length < 3) return emptyList()
-
-        val normalizedQuery = query.lowercase().trim()
-        val foundUsers = mutableSetOf<UserProfile>()
-
-        try {
-            val allUsersSnapshot = usersRef
-                .get().await()
-
-            allUsersSnapshot.children.forEach { dataSnapshot ->
-                dataSnapshot.getValue(UserProfile::class.java)?.let { user ->
-                    val userEmailLower = user.email.lowercase()
-                    val userNameLower = user.displayName.lowercase()
-
-                    if (userEmailLower.contains(normalizedQuery) || userNameLower.contains(normalizedQuery)) {
-                        foundUsers.add(user.copy(uid = dataSnapshot.key ?: ""))
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("HomeViewModel", "Firebase user search failed", e)
-            return emptyList()
-        }
-
-        val currentUserId = firebaseAuth.currentUser?.uid
-        return foundUsers.filterNot { it.uid == currentUserId}.toList().sortedBy { it.displayName }
     }
 
     fun clearAddFriendSearch() {
         _addFriendSearchQuery.value = ""
-        _addFriendSearchResults.value = emptyList()
-        _isSearchingUsers.value = false
+        _addFriendSearchResults.value = Resource.Success(emptyList())
+        searchJob?.cancel()
     }
 
     fun clearSnackbarMessage() {

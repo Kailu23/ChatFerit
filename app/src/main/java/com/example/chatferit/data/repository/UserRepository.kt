@@ -2,9 +2,13 @@ package com.example.chatferit.data.repository
 
 import android.content.Context
 import android.util.Log
+import com.example.chatferit.model.UserProfile
 import com.example.chatferit.model.UserPublicKeys
 import com.example.chatferit.util.CryptoManager
+import com.example.chatferit.util.Resource
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DatabaseException
+import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ktx.getValue
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -21,9 +25,11 @@ import javax.inject.Singleton
 class UserRepository @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val database: FirebaseDatabase,
-    private val cryptoManager: CryptoManager
+    private val cryptoManager: CryptoManager,
+    private val firebaseAuth: FirebaseAuth
 ) : iUserRepository {
 
+    private val usersRef: DatabaseReference = database.getReference("users")
     companion object {
         const val USERS_NODE = "users"
         const val PUBLIC_KEYS_PATH = "publicKeys"
@@ -175,6 +181,42 @@ class UserRepository @Inject constructor(
         } catch (e: Exception) {
             Log.e("UserRepository", "Error fetching public keys for $userId from Realtime Database", e)
             Result.failure(Exception("Failed to retrieve user public keys from Realtime Database.", e))
+        }
+    }
+
+    override suspend fun searchUsers(query: String): Resource<List<UserProfile>> {
+            if(query.isBlank() || query.length < 3) return Resource.Success(emptyList())
+
+            val normalizedQuery = query.lowercase().trim()
+            val foundUsers = mutableSetOf<UserProfile>()
+
+        return try {
+            val allUsersSnapshot = usersRef.get().await()
+
+            allUsersSnapshot.children.forEach { dataSnapshot ->
+                val userUid = dataSnapshot.key
+                dataSnapshot.getValue(UserProfile::class.java)?.let { user ->
+                    if (userUid != null) {
+                        val userProfileWithUid = user.copy(uid = userUid)
+                        val userEmailLower = userProfileWithUid.email?.lowercase() ?: ""
+                        val userNameLower = userProfileWithUid.displayName.lowercase()
+
+                        if (userEmailLower.contains(normalizedQuery) || userNameLower.contains(
+                                normalizedQuery
+                            )
+                        ) {
+                            foundUsers.add(user.copy(uid = dataSnapshot.key ?: ""))
+                        }
+                    }
+                }
+            }
+            val currentUserId = firebaseAuth.currentUser?.uid ?: ""
+            val resultList = foundUsers.filterNot { it.uid == currentUserId }.toList()
+                .sortedBy { it.displayName }
+            Resource.Success(resultList)
+        } catch (e: Exception) {
+            Log.e("HomeViewModel", "Firebase user search failed", e)
+            return Resource.Success(emptyList())
         }
     }
 }

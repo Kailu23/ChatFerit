@@ -1,6 +1,8 @@
 package com.example.chatferit.data.repository
 
+import com.example.chatferit.model.UserProfile
 import com.example.chatferit.model.UserPublicKeys
+import com.example.chatferit.util.Resource
 
 interface iUserRepository {
     /**
@@ -20,7 +22,8 @@ interface iUserRepository {
      */
     suspend fun getUserPublicKeys(userId: String) : Result<UserPublicKeys?>
 
+    suspend fun searchUsers(query: String) : Resource<List<UserProfile>>
     //Future implementation
 //    suspend fun getCurrentUserProfile() : Result<UserProfile> TODO(): Profile in settings
-//    suspend fun searchUsers(query: String) : Result<List<Users>>
+
 }

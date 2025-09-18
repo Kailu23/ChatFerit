@@ -73,7 +73,7 @@ class FirebaseMessageService : FirebaseMessagingService() {
                             channelId = NotificationConstants.CHANNEL_ID_GENERAL,
                             title = senderName,
                             message = "[Encrypted message - could not decrypt]",
-                            extras = mapOf("channelId" to channelIdFCM) // Still allow navigation
+                            extras = mapOf("channelId" to channelIdFCM)
                         )
                     } catch (e: IOException) {
                         Log.e("FirebaseMessageService", "Decryption failed (IO Error): ${e.message}", e)
@@ -86,7 +86,7 @@ class FirebaseMessageService : FirebaseMessagingService() {
                 remoteMessage.notification?.let {
                     Log.d("FirebaseMessageService", "Fallback to notification payload: Title: ${it.title}, Body: ${it.body}")
                     notificationHelper.showSimpleNotification(
-                        notificationId = NotificationConstants.NOTIFICATION_ID_NEW_MESSAGE, // A different ID for generic
+                        notificationId = NotificationConstants.NOTIFICATION_ID_NEW_MESSAGE,
                         channelId = NotificationConstants.CHANNEL_ID_GENERAL,
                         title = it.title ?: "New Message",
                         message = it.body ?: "You have a new message."
@@ -94,7 +94,6 @@ class FirebaseMessageService : FirebaseMessagingService() {
                 }
             }
         } else if (remoteMessage.notification != null) {
-            // Only notification payload, no data payload. Handle as a simple notification.
             remoteMessage.notification?.let {
                 Log.d("FirebaseMessageService", "Received message with only notification payload: Title: ${it.title}, Body: ${it.body}")
                 notificationHelper.showSimpleNotification(

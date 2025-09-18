@@ -71,7 +71,7 @@ fun SignUpScreen(navController: NavController) {
                 navController.navigate("home") {
                     popUpTo(navController.graph.startDestinationId) { inclusive = true }
                 }
-                viewModel.resetAuthScreenState() // Reset after handling
+                viewModel.resetAuthScreenState()
             }
             is AuthScreenState.AuthError -> {
                 Toast.makeText(
@@ -79,7 +79,7 @@ fun SignUpScreen(navController: NavController) {
                     "Sign Up Error: ${currentAuthScreenState.message}",
                     Toast.LENGTH_LONG
                 ).show()
-                viewModel.resetAuthScreenState() // Reset after handling
+                viewModel.resetAuthScreenState()
             }
             AuthScreenState.Loading -> {
                 Log.d("SignUpScreen", "AuthScreenState is Loading")

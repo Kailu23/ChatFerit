@@ -278,11 +278,6 @@ fun FriendItem(userProfile: UserProfile, onClick: () -> Unit) {
                 fontWeight = FontWeight.Medium,
                 fontSize = 18.sp
             )
-            /*Text(
-                text = userProfile.status,
-                color = if (userProfile.status == "Online") Color.Green.copy(alpha = 0.75f) else Color.Gray,
-                fontSize = 14.sp
-            )*/
         }
     }
 }

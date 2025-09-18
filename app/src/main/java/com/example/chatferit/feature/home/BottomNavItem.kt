@@ -1,4 +1,4 @@
-package com.example.chatferit.feature.home // Or feature.home.navigation
+package com.example.chatferit.feature.home
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Group

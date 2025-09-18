@@ -143,8 +143,6 @@ fun HomeScreen(navController: NavController) {
                         selected = selectedScreenRoute == item.route,
                         onClick = {
                             viewModel.onBottomNavItemSelected(item.route)
-                            /*if (selectedScreenRoute != item.route) {
-                            }*/
                         },
                         icon = { Icon(item.icon, contentDescription = item.label) },
                         label = { Text(item.label) },

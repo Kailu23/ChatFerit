@@ -21,6 +21,6 @@ interface iUserRepository {
     suspend fun getUserPublicKeys(userId: String) : Result<UserPublicKeys?>
 
     //Future implementation
-//    suspend fun getCurrentUserProfile() : Result<UserProfile>
+//    suspend fun getCurrentUserProfile() : Result<UserProfile> TODO(): Profile in settings
 //    suspend fun searchUsers(query: String) : Result<List<Users>>
 }

@@ -6,19 +6,16 @@ module.exports = {
   },
   extends: [
     "eslint:recommended",
-    "google", // Assuming you're using this or a similar strict config
+    "google",
   ],
   parserOptions: {
-    ecmaVersion: 2020, // Or your Node version's supported ES version
+    ecmaVersion: 2020,
   },
   rules: {
-    // You can keep other rules like quotes and indent if you like them
     "quotes": ["error", "double"],
-    "indent": ["error", 2], // Or 4, or whatever your preference is
+    "indent": ["error", 2],
 
-    // --- Disable JSDoc Rules ---
     "require-jsdoc": "off",
-    "valid-jsdoc": "off", // This rule checks the validity of JSDoc comments
-    // It's often the one that's picky about descriptions
+    "valid-jsdoc": "off",
   },
 };

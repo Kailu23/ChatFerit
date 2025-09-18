@@ -281,7 +281,6 @@ class ChatViewModel @Inject constructor(
                 }. sortedBy{it.createdAt}
                 _messages.value = processedMessages
 
-                IncomingMessageNotifications(messages = processedMessages, channelId = channelId)
             }
             override fun onCancelled(error: DatabaseError) {
                 Log.w("ChatViewModel", "Listen for messages cancelled for $channelId", error.toException())
@@ -307,46 +306,6 @@ class ChatViewModel @Inject constructor(
             }
         }
     }
-    private fun IncomingMessageNotifications(messages: List<Message>, channelId: String) {
-        if(messages.isEmpty()) return
-
-        val latestMessage = messages.last()
-        val currentUser = firebaseAuth.currentUser ?:  return
-
-        val lastNotifiedTimestamp: Long = lastNotifiedMessageTimestampPerChannel[channelId] ?: 0L
-
-        val isNotFromCurrentUser = latestMessage.senderId != currentUserId
-        val isInChat = _isUserViewingCurrentChat.value && _currentListeningChannelId.value == channelId
-
-        val shouldNotify = isNotFromCurrentUser && !isInChat
-
-        if (shouldNotify) {
-            Log.d(
-                "ChatViewModel",
-                "Notifying for message: ${latestMessage.id} in channel $channelId"
-            )
-
-            val notificationMessageBody = if (latestMessage.imageUrl != null) {
-                "${latestMessage.senderName ?: "Someone"} sent an image."
-            } else {
-                latestMessage.plainTextMessage ?: "[Message content unavailable]"
-            }
-
-            val notificationTitle = latestMessage.senderName
-
-            /*notificationHelper.showSimpleNotification(
-                notificationId = NotificationConstants.NOTIFICATION_ID_NEW_MESSAGE + channelId.hashCode(),
-                channelId = NotificationConstants.CHANNEL_ID_HIGH_IMPORTANCE,
-                title = latestMessage.senderName ?: "Friend",
-                message = notificationMessageBody,
-            )*/
-            lastNotifiedMessageTimestampPerChannel[channelId] = latestMessage.createdAt
-        } else {
-            if (!isNotFromCurrentUser) Log.d("ChatViewModel", "Notification suppressed (from self) for ${latestMessage.id}")
-            if (isInChat) Log.d("ChatViewModel", "Notification suppressed (user viewing chat) for ${latestMessage.id}")
-        }
-    }
-
     private fun clearMessageListener() {
         val channelToClear = this._currentListeningChannelId
         channelToClear?.value.let { channelId ->

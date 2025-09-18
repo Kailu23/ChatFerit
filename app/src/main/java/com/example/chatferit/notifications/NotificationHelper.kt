@@ -79,7 +79,7 @@ class NotificationHelper @Inject constructor(@ApplicationContext private val con
         )
 
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_launcher_foreground) // TODO: Replace with your actual app icon
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(title)
             .setContentText(message)
             .setPriority(if (channelId == NotificationConstants.CHANNEL_ID_HIGH_IMPORTANCE) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)

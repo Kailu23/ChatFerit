@@ -542,7 +542,6 @@ class HomeViewModel @Inject constructor(
         clearAddFriendSearch()
         _snackbarMessage.value = "Logged out successfully."
 
-        // Signal navigation
         _navigateToLogin.value = true
         Log.d("HomeViewModel", "User logged out.")
     }

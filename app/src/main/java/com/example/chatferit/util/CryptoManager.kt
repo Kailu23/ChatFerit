@@ -24,13 +24,11 @@ import java.security.GeneralSecurityException
 import javax.inject.Inject
 import javax.inject.Singleton
 
-@Singleton // Marks this class as a Singleton provided by Hilt
+@Singleton
 class CryptoManager @Inject constructor(
-    // Hilt will inject the ApplicationContext
     @ApplicationContext private val context: Context
 ) {
 
-    // Companion object for constants is fine, or they can be private const val within the class.
     companion object {
         private const val PREF_FILE_NAME = "chat_ferit_keyset_prefs"
         private const val KEYSET_NAME_HYBRID = "chat_ferit_hybrid_keyset"
@@ -48,7 +46,6 @@ class CryptoManager @Inject constructor(
             SignatureConfig.register()
         } catch (e: GeneralSecurityException) {
             Log.e("CryptoManager", "Failed to initialize Tink CryptoManager", e)
-            // Consider a more graceful way to handle this if the app can function partially without crypto
             throw RuntimeException("Failed to initialize Tink CryptoManager", e)
         }
     }
@@ -80,7 +77,7 @@ class CryptoManager @Inject constructor(
 
     @Throws(GeneralSecurityException::class, IOException::class)
     fun decryptHybrid(encryptedPayloadBase64: String): String {
-        val privateKeysetHandle = getOrGenerateHybridKeysetHandle() // Gets local private key
+        val privateKeysetHandle = getOrGenerateHybridKeysetHandle()
         val hybridDecrypt = privateKeysetHandle.getPrimitive(HybridDecrypt::class.java)
         val ciphertextBytes = Base64.decode(encryptedPayloadBase64, Base64.NO_WRAP)
         val decryptedBytes = hybridDecrypt.decrypt(ciphertextBytes, HYBRID_CONTEXT_INFO)
@@ -89,7 +86,6 @@ class CryptoManager @Inject constructor(
 
     @Throws(GeneralSecurityException::class, IOException::class)
     private fun getOrGenerateSignatureKeysetHandle(): KeysetHandle {
-        // Now uses the injected 'context' field
         return AndroidKeysetManager.Builder()
             .withSharedPref(context, KEYSET_NAME_SIGNATURE, PREF_FILE_NAME)
             .withKeyTemplate(KeyTemplates.get("ECDSA_P256"))

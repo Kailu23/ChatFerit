@@ -48,7 +48,6 @@ interface iFriendRepository {
      */
     fun getFriendUids(currentUserId: String): Flow<Resource<Set<String>>>
 
-    // Optional: If you need to find a user by email/username to get their UID before sending a request
-    // suspend fun findUserByEmail(email: String): Resource<String?> // Returns UID or null/error
-    // suspend fun findUserByUsername(username: String): Resource<String?> // Returns UID or null/error
+    // suspend fun findUserByEmail(email: String): Resource<String?>
+    // suspend fun findUserByUsername(username: String): Resource<String?>
 }

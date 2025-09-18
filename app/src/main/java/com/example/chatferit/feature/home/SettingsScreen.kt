@@ -98,7 +98,6 @@ fun SettingsScreen(
                 .background(color = MaterialTheme.colorScheme.background)
                 .padding(paddingValues)
                 .padding(16.dp),
-//            horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween,
 
             ) {

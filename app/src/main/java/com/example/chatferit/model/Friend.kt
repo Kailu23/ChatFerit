@@ -5,5 +5,4 @@ data class Friend(
     val name: String = "",
     val status: String = "",
     val profileImageUrl: String? = null
-    //val directChatChannelId : String? = null
 )

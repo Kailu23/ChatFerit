@@ -59,7 +59,7 @@ fun MainApp(navController: NavHostController)
 
         val targetGraphRoute = if (currentUser != null) AppRoutes.HOME else AppRoutes.AUTH_GRAPH_ROUTE
 
-        LaunchedEffect(currentUser, navController) { // Key on currentUser directly
+        LaunchedEffect(currentUser, navController) {
             val currentRoute = navController.currentBackStackEntry?.destination?.route
             Log.d("MainApp", "Auth Nav Check: User=${currentUser?.uid}, TargetGraph=$targetGraphRoute, CurrentRoute=$currentRoute, InitialNavDone=$hasPerformedInitialNavigation")
 
@@ -73,14 +73,14 @@ fun MainApp(navController: NavHostController)
                 if (currentUser != null) {
                     if (currentRoute == AppRoutes.SIGN_IN || currentRoute == AppRoutes.SIGN_UP) {
                         Log.d("MainApp", "User logged IN, but on auth screen ($currentRoute). Deferring main navigation.")
-                    } else if (currentRoute != AppRoutes.HOME && !currentRoute?.startsWith("chat/")!!) { // And not already home or in chat
+                    } else if (currentRoute != AppRoutes.HOME && !currentRoute?.startsWith("chat/")!!) {
                         Log.d("MainApp", "User logged IN, not on auth screen. Navigating to HOME from $currentRoute.")
                         navController.navigate(AppRoutes.HOME) {
                             popUpTo(navController.graph.id) { inclusive = true }
                         }
                     }
                 } else {
-                    if (currentRoute != AppRoutes.SIGN_IN && currentRoute != AppRoutes.AUTH_GRAPH_ROUTE) { // And not already on an auth screen
+                    if (currentRoute != AppRoutes.SIGN_IN && currentRoute != AppRoutes.AUTH_GRAPH_ROUTE) {
                         Log.d("MainApp", "User logged OUT. Navigating to AUTH_GRAPH from $currentRoute.")
                         navController.navigate(AppRoutes.AUTH_GRAPH_ROUTE) {
                             popUpTo(navController.graph.id) { inclusive = true }
